@@ -1,0 +1,11 @@
+# Scripts and tools (not needed for deployment)
+/scripts
+
+# Documentation
+/docs
+/tasks
+
+# Development files
+urls.json
+screenshot-results.json
+screenshots/
