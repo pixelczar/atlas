@@ -1,94 +1,271 @@
 'use client';
 
-import { Grid, RotateCcw, ZoomIn, ZoomOut, Maximize2, Eye, EyeOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ZoomIn, ZoomOut, Maximize2, FileText, ChevronDown, Check, List, Grid3x3, Columns, CircleDot, Sparkles, GitBranch, LayoutGrid, Network } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { LayoutType } from '@/lib/layout-algorithms';
 
 interface FloatingControlsProps {
-  onRegrid: () => void;
+  projectId: string;
+  selectedSitemap: string;
+  selectedLayout: LayoutType;
+  onSelectSitemap: (sitemap: string) => void;
+  onSelectLayout: (layout: LayoutType) => void;
   onFitView: () => void;
-  onToggleHide: () => void;
-  selectedNodes: any[];
   onZoomIn: () => void;
   onZoomOut: () => void;
-  onResetView?: () => void;
+  onBrowseSitemap?: () => void;
 }
 
 export function FloatingControls({ 
-  onRegrid, 
+  projectId,
+  selectedSitemap,
+  selectedLayout,
+  onSelectSitemap,
+  onSelectLayout,
   onFitView, 
-  onToggleHide,
-  selectedNodes,
   onZoomIn, 
-  onZoomOut, 
-  onResetView 
+  onZoomOut,
+  onBrowseSitemap,
 }: FloatingControlsProps) {
-  const hasSelectedNodes = selectedNodes.length > 0;
-  const hasHiddenNodes = selectedNodes.some(node => node.data?.isHidden);
+  const [sitemaps, setSitemaps] = useState<string[]>([]);
+  const [isSitemapOpen, setIsSitemapOpen] = useState(false);
+  const [isLayoutOpen, setIsLayoutOpen] = useState(false);
+
+  useEffect(() => {
+    const fetchSitemaps = async () => {
+      if (!projectId || !db) return;
+
+      try {
+        const projectRef = doc(db, 'projects', projectId);
+        const projectSnap = await getDoc(projectRef);
+
+        if (projectSnap.exists()) {
+          const data = projectSnap.data();
+          const sitemapList = data.sitemaps || [];
+          setSitemaps(['All Sitemaps', ...sitemapList]);
+        }
+      } catch (error) {
+        console.error('Error fetching sitemaps:', error);
+      }
+    };
+
+    fetchSitemaps();
+  }, [projectId]);
+
+  const showSitemapSelector = sitemaps.length > 1;
+
+  const layoutOptions: { value: LayoutType; label: string; icon: any }[] = [
+    { value: 'grid', label: 'Grid', icon: Grid3x3 },
+    { value: 'depth-columns', label: 'Depth Columns', icon: Columns },
+    { value: 'radial', label: 'Radial', icon: CircleDot },
+    { value: 'tree', label: 'Tree', icon: GitBranch },
+    { value: 'dagre', label: 'Dagre', icon: Network },
+    { value: 'force', label: 'Force', icon: Sparkles },
+  ];
+
+  const currentLayout = layoutOptions.find(l => l.value === selectedLayout) || layoutOptions[0];
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-      <div className="flex items-center gap-2 rounded-full bg-white/95 backdrop-blur-sm shadow-lg px-2 py-1 transition-all duration-300 ease-in-out">
-        {/* Zoom Controls */}
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-10 w-10 text-gray-600 hover:text-gray-900 hover:bg-gray-100/80 transition-colors duration-200 ease-in-out [&_svg]:!h-6 [&_svg]:!w-6"
-          onClick={onZoomIn}
-          title="Zoom in"
-        >
-          <ZoomIn />
-        </Button>
-        
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-10 w-10 text-gray-600 hover:text-gray-900 hover:bg-gray-100/80 transition-colors duration-200 ease-in-out [&_svg]:!h-6 [&_svg]:!w-6"
-          onClick={onZoomOut}
-          title="Zoom out"
-        >
-          <ZoomOut />
-        </Button>
-        
-        <div className="h-5 w-px bg-gray-300/60" />
-        
-        {/* Grid and Fit Controls */}
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-10 w-10 text-gray-600 hover:text-gray-900 hover:bg-gray-100/80 transition-colors duration-200 ease-in-out [&_svg]:!h-6 [&_svg]:!w-6"
-          onClick={onRegrid}
-          title="Re-grid all nodes"
-        >
-          <Grid />
-        </Button>
-        
-        <div className="h-5 w-px bg-gray-300/60" />
-        
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-10 w-10 text-gray-600 hover:text-gray-900 hover:bg-gray-100/80 transition-colors duration-200 ease-in-out [&_svg]:!h-6 [&_svg]:!w-6"
-          onClick={onFitView}
-          title="Fit view to content"
-        >
-          <Maximize2 />
-        </Button>
-        
-        {hasSelectedNodes && (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2, duration: 0.3 }}
+      className="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center"
+    >
+      <div 
+        className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-[#5B98D6]/20 bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Layout Switcher */}
+        <div className="relative">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsLayoutOpen(!isLayoutOpen)}
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
+            title="Change layout"
+          >
+            <LayoutGrid className="h-3.5 w-3.5 text-[#4863B0]" />
+            <span className="font-medium">{currentLayout.label}</span>
+            <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isLayoutOpen ? 'rotate-180' : ''}`} />
+          </motion.button>
+
+          <AnimatePresence>
+            {isLayoutOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setIsLayoutOpen(false)}
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute bottom-full left-0 mb-2 min-w-[180px] rounded-xl border border-[#5B98D6]/20 bg-white/95 backdrop-blur-sm shadow-xl shadow-[#4863B0]/10 z-20"
+                >
+                  <div className="p-2">
+                    {layoutOptions.map((layout, index) => {
+                      const Icon = layout.icon;
+                      return (
+                        <motion.button
+                          key={layout.value}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          onClick={() => {
+                            onSelectLayout(layout.value);
+                            setIsLayoutOpen(false);
+                          }}
+                          className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors ${
+                            selectedLayout === layout.value
+                              ? 'bg-[#5B98D6]/10 text-[#4863B0] font-medium'
+                              : 'text-[#1a1a1a] hover:bg-[#5B98D6]/5'
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          <span className="flex-1">{layout.label}</span>
+                          {selectedLayout === layout.value && (
+                            <Check className="h-3 w-3 text-[#4863B0]" />
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Divider */}
+        <div className="h-5 w-px bg-[#5B98D6]/20" />
+
+        {/* Sitemap Selector (only if multiple sitemaps) */}
+        {showSitemapSelector && (
           <>
-            <div className="h-5 w-px bg-gray-300/60" />
-            <Button
-              size="icon"
-              variant="ghost"
-              className={`h-10 w-10 hover:bg-gray-100/80 transition-colors duration-200 ease-in-out [&_svg]:!h-6 [&_svg]:!w-6 ${hasHiddenNodes ? 'text-orange-600 hover:text-orange-700' : 'text-gray-600 hover:text-gray-900'}`}
-              onClick={onToggleHide}
-              title={hasHiddenNodes ? "Show selected nodes" : "Hide selected nodes"}
-            >
-              {hasHiddenNodes ? <Eye /> : <EyeOff />}
-            </Button>
+            <div className="relative">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setIsSitemapOpen(!isSitemapOpen)}
+                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
+                title="Switch sitemap view"
+              >
+                <FileText className="h-3.5 w-3.5 text-[#4863B0]" />
+                <span className="max-w-[120px] truncate font-medium">{selectedSitemap}</span>
+                <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isSitemapOpen ? 'rotate-180' : ''}`} />
+              </motion.button>
+
+              <AnimatePresence>
+                {isSitemapOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setIsSitemapOpen(false)}
+                    />
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute bottom-full left-0 mb-2 min-w-[200px] rounded-xl border border-[#5B98D6]/20 bg-white/95 backdrop-blur-sm shadow-xl shadow-[#4863B0]/10 z-20"
+                    >
+                      <div className="p-2">
+                        {sitemaps.map((sitemap, index) => (
+                          <motion.button
+                            key={sitemap}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            onClick={() => {
+                              onSelectSitemap(sitemap);
+                              setIsSitemapOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${
+                              selectedSitemap === sitemap
+                                ? 'bg-[#5B98D6]/10 text-[#4863B0] font-medium'
+                                : 'text-[#1a1a1a] hover:bg-[#5B98D6]/5'
+                            }`}
+                          >
+                            <span className="truncate">{sitemap}</span>
+                            {selectedSitemap === sitemap && (
+                              <Check className="ml-2 h-3 w-3 flex-shrink-0 text-[#4863B0]" />
+                            )}
+                          </motion.button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Divider */}
+            <div className="h-5 w-px bg-[#5B98D6]/20" />
           </>
         )}
+
+        {/* Browse Sitemap (XML List) */}
+        {onBrowseSitemap && (
+          <>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={onBrowseSitemap}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+              title="Browse all URLs"
+            >
+              <List className="h-4 w-4" />
+            </motion.button>
+
+            {/* Divider */}
+            <div className="h-5 w-px bg-[#5B98D6]/20" />
+          </>
+        )}
+
+        {/* Zoom In */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onZoomIn}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+          title="Zoom in"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </motion.button>
+        
+        {/* Zoom Out */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onZoomOut}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+          title="Zoom out"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </motion.button>
+        
+        {/* Divider */}
+        <div className="h-5 w-px bg-[#5B98D6]/20" />
+        
+        {/* Fit View */}
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onFitView}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+          title="Center and fit all nodes in view"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 }

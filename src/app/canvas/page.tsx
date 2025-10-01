@@ -1,36 +1,41 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { AtlasLogo } from '@/components/ui/AtlasLogo';
-import { ArrowLeft, Download, Share2 } from 'lucide-react';
+import { Download, Share2 } from 'lucide-react';
 import { AddNodeInput } from '@/components/canvas/AddNodeInput';
+import { SitemapBrowser } from '@/components/projects/SitemapBrowser';
+import { ProjectSidebar } from '@/components/canvas/ProjectSidebar';
+import { Breadcrumb } from '@/components/canvas/Breadcrumb';
 import { addNodeToFirestore, calculateNewNodePosition } from '@/lib/node-operations';
+import { LayoutType } from '@/lib/layout-algorithms';
 
 // Dynamic import to avoid SSR issues with React Flow
 const SiteMapFlow = dynamic(() => import('@/components/flow/SiteMapFlow'), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full items-center justify-center bg-[#DDEEF9]">
-      <p className="text-[#1a1a1a]/60">Loading canvas...</p>
-    </div>
-  ),
+  loading: () => null, // No loading state here - handled inside SiteMapFlow
 });
 
 export default function CanvasPage() {
+  const searchParams = useSearchParams();
+  const projectId = searchParams.get('project') || 'demo-project';
+  
   const [isAddingNode, setIsAddingNode] = useState(false);
   const [existingNodes, setExistingNodes] = useState<any[]>([]);
   const [fitViewFunction, setFitViewFunction] = useState<(() => void) | null>(null);
+  const [selectedSitemap, setSelectedSitemap] = useState('All Sitemaps');
+  const [selectedLayout, setSelectedLayout] = useState<LayoutType>('tree');
+  const [showBrowser, setShowBrowser] = useState(false);
+  const [showProjectSidebar, setShowProjectSidebar] = useState(false);
 
   const handleAddNode = useCallback(async (url: string) => {
     setIsAddingNode(true);
     try {
-      // For demo, use a mock project ID and user ID
-      // In production, get these from auth context and route params
-      const projectId = 'demo-project';
-      const userId = 'demo-user';
+      const userId = 'demo-user'; // TODO: Get from auth context
       
       // Calculate position for new node using existing nodes
       const position = calculateNewNodePosition(existingNodes, { x: 400, y: 200 });
@@ -63,39 +68,42 @@ export default function CanvasPage() {
   return (
     <div className="flex h-screen flex-col bg-[#DDEEF9]">
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-[#5B98D6]/20 bg-[#DDEEF9] px-4 py-2">
+      <div className="flex items-center justify-between border-b border-[#5B98D6]/20 bg-[#DDEEF9] px-3 py-1.5">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-[#1a1a1a]/60 hover:bg-[#5B98D6]/10 hover:text-[#1a1a1a]"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              Back
-            </Button>
-          </Link>
-          <AtlasLogo size="md"  />
+          {/* Atlas Logo - triggers sidebar */}
+          <button
+            onClick={() => setShowProjectSidebar(true)}
+            className="transition-opacity hover:opacity-70"
+          >
+            <AtlasLogo size="sm" />
+          </button>
+
+          {/* Breadcrumb */}
+          <Breadcrumb
+            projectId={projectId}
+            selectedSitemap={selectedSitemap}
+            onSitemapClick={() => setShowBrowser(true)}
+          />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Add Node Input */}
-          <div className="w-64">
+          <div className="w-52">
             <AddNodeInput onAddNode={handleAddNode} isLoading={isAddingNode} />
           </div>
           
-          <div className="h-4 w-px bg-gray-800" />
+          <div className="h-4 w-px bg-[#5B98D6]/20" />
           
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 border-[#4863B0]/30 bg-transparent text-[#1a1a1a]/70 hover:bg-[#4863B0]/10 hover:text-[#1a1a1a]"
+            className="h-7 gap-1.5 border-[#4863B0]/30 bg-transparent px-3 text-xs text-[#1a1a1a]/70 hover:bg-[#4863B0]/10 hover:text-[#1a1a1a]"
           >
             <Share2 className="h-3 w-3" />
             Share
           </Button>
           <Button
             size="sm"
-            className="gap-2 bg-[#4863B0] text-white hover:bg-[#5B98D6]"
+            className="h-7 gap-1.5 bg-[#4863B0] px-3 text-xs text-white hover:bg-[#5B98D6]"
           >
             <Download className="h-3 w-3" />
             Export
@@ -106,10 +114,30 @@ export default function CanvasPage() {
       {/* Canvas */}
       <div className="flex-1">
         <SiteMapFlow 
+          projectId={projectId}
+          selectedSitemap={selectedSitemap}
+          selectedLayout={selectedLayout}
+          onSelectSitemap={setSelectedSitemap}
+          onSelectLayout={setSelectedLayout}
+          onBrowseSitemap={() => setShowBrowser(true)}
           onNodesChange={handleNodesChange} 
           onFlowReady={handleFlowReady}
         />
       </div>
+
+      {/* Sitemap Browser Modal */}
+      <SitemapBrowser
+        isOpen={showBrowser}
+        onClose={() => setShowBrowser(false)}
+        projectId={projectId}
+      />
+
+      {/* Project Sidebar */}
+      <ProjectSidebar
+        isOpen={showProjectSidebar}
+        onClose={() => setShowProjectSidebar(false)}
+        currentProjectId={projectId}
+      />
     </div>
   );
 }

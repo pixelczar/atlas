@@ -73,9 +73,13 @@ export function calculateNewNodePosition(
 
 /**
  * Re-grid all nodes in a project to proper grid positions
- * Only updates positions, doesn't trigger Firestore listeners
+ * Calculates optimal columns based on viewport width
  */
-export async function regridAllNodes(projectId: string, nodes: Array<{ id: string; position: { x: number; y: number } }>): Promise<void> {
+export async function regridAllNodes(
+  projectId: string, 
+  nodes: Array<{ id: string; position: { x: number; y: number } }>,
+  viewportWidth?: number
+): Promise<void> {
   if (nodes.length === 0) {
     console.log('⏸️ No nodes to re-grid');
     return;
@@ -86,28 +90,40 @@ export async function regridAllNodes(projectId: string, nodes: Array<{ id: strin
     throw new Error('Firestore not initialized');
   }
 
-  console.log(`🔄 Starting manual re-grid of ${nodes.length} nodes`);
+  console.log(`🔄 Starting viewport-aware re-grid of ${nodes.length} nodes`);
   
   try {
+    // Grid parameters
+    const nodeWidth = 288; // Fixed card width
+    const nodeHeight = 180; // Approximate height with spacing
+    const spacing = 40; // Space between nodes
+    const padding = 100; // Padding from viewport edges
+    
+    // Calculate columns based on viewport width
+    const availableWidth = (viewportWidth || 1400) - (padding * 2);
+    const columnsPerRow = Math.max(1, Math.floor(availableWidth / (nodeWidth + spacing)));
+    
+    console.log(`📐 Viewport: ${viewportWidth}px, Columns: ${columnsPerRow}`);
+    
     const batch = writeBatch(db);
     
     // Calculate new grid positions for all nodes
-    const newPositions = nodes.map((_, index) => {
-      const existingNodes = nodes.slice(0, index);
-      return calculateNewNodePosition(existingNodes, { x: 400, y: 100 });
-    });
-
-    // Update each node with its new position
     nodes.forEach((node, index) => {
+      const row = Math.floor(index / columnsPerRow);
+      const col = index % columnsPerRow;
+      
+      const x = padding + (col * (nodeWidth + spacing));
+      const y = padding + (row * (nodeHeight + spacing));
+      
       const nodeRef = doc(db, `projects/${projectId}/nodes`, node.id);
       batch.update(nodeRef, {
-        position: newPositions[index],
+        position: { x, y },
         updatedAt: Timestamp.now()
       });
     });
 
     await batch.commit();
-    console.log(`✅ Manual re-grid completed for ${nodes.length} nodes`);
+    console.log(`✅ Re-grid completed: ${nodes.length} nodes in ${columnsPerRow} columns`);
   } catch (error) {
     console.error('❌ Error during re-gridding:', error);
     throw error;

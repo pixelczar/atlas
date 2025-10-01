@@ -3,11 +3,14 @@ import { Timestamp } from 'firebase/firestore';
 /**
  * Project Document
  * Top-level collection for sitemap projects
+ * Each domain is represented as a project
  */
 export interface Project {
   id: string;
   name: string;
-  sitemapUrl: string;
+  domain: string; // The domain/website URL (e.g., "example.com")
+  sitemapUrl: string; // The actual sitemap.xml URL that was found
+  urlCount: number; // Number of URLs in the sitemap
   ownerId: string;
   settings: {
     autoLayout: boolean;

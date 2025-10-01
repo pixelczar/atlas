@@ -72,7 +72,7 @@ export function AddNodeInput({ onAddNode, isLoading = false }: AddNodeInputProps
               setError('');
             }}
             placeholder="Enter page URL to add..."
-            className="border-[#5B98D6]/30 bg-white pr-10 text-[#1a1a1a] placeholder:text-[#1a1a1a]/40 focus-visible:border-[#4863B0] focus-visible:ring-[#4863B0]/20"
+            className="h-7 border-[#5B98D6]/30 bg-white pr-8 text-xs text-[#1a1a1a] placeholder:text-[#1a1a1a]/40 focus-visible:border-[#4863B0] focus-visible:ring-[#4863B0]/20"
             disabled={isLoading}
           />
           {isLoading && (
@@ -84,7 +84,7 @@ export function AddNodeInput({ onAddNode, isLoading = false }: AddNodeInputProps
         <Button
           type="submit"
           disabled={isLoading || !url.trim()}
-          className="gap-2 bg-[#4863B0] text-white hover:bg-[#5B98D6]"
+          className="h-7 gap-1.5 bg-[#4863B0] px-3 text-xs text-white hover:bg-[#5B98D6]"
         >
           <Plus className="h-3 w-3" />
           Add

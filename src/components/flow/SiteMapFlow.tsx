@@ -12,16 +12,17 @@ import ReactFlow, {
   type Connection,
   type Edge,
 } from 'reactflow';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { doc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
 
 import IframeNode from './IframeNode';
 import { FloatingControls } from '@/components/canvas/FloatingControls';
+import { SelectionToolbar } from '@/components/canvas/SelectionToolbar';
+import { CanvasLoader } from '@/components/canvas/CanvasLoader';
 import { useRealtimeNodes } from '@/hooks/useRealtimeNodes';
-import { regridAllNodes } from '@/lib/node-operations';
 import { db } from '@/lib/firebase';
-
-const initialEdges: Edge[] = [];
+import { collection, query, onSnapshot } from 'firebase/firestore';
+import { applyLayout, LayoutType } from '@/lib/layout-algorithms';
 
 // Component that handles fitView functionality inside ReactFlow
 function FlowControls({ 
@@ -51,18 +52,11 @@ function FlowControls({
   }, [fitView]);
 
   const handleRegrid = useCallback(async () => {
-    try {
-      console.log('🎯 Manual re-grid requested for', nodes.length, 'nodes');
-      await regridAllNodes(projectId, nodes);
-      // Simple fit view after re-gridding
-      setTimeout(() => {
-        smoothFitView();
-      }, 500);
-    } catch (error) {
-      console.error('❌ Error re-gridding nodes:', error);
-      alert(`Failed to re-grid nodes: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }, [projectId, nodes, smoothFitView]);
+    // TODO: Re-apply hierarchical layout
+    // For now, just fit view to show all nodes
+    console.log('🎯 Fit view requested');
+    smoothFitView();
+  }, [smoothFitView]);
 
   useEffect(() => {
     setFitViewFunction(smoothFitView);
@@ -80,21 +74,66 @@ function FlowControls({
 
 interface SiteMapFlowProps {
   projectId?: string;
+  selectedSitemap?: string;
+  selectedLayout?: LayoutType;
+  onSelectSitemap?: (sitemap: string) => void;
+  onSelectLayout?: (layout: LayoutType) => void;
+  onBrowseSitemap?: () => void;
   onNodesChange?: (nodes: any[]) => void;
   onFlowReady?: (fitView: () => void, regrid: () => void) => void;
 }
 
-export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange: onNodesChangeCallback, onFlowReady }: SiteMapFlowProps) {
+export default function SiteMapFlow({
+  projectId = 'demo-project',
+  selectedSitemap = 'All Sitemaps',
+  selectedLayout = 'tree',
+  onSelectSitemap,
+  onSelectLayout,
+  onBrowseSitemap,
+  onNodesChange: onNodesChangeCallback, 
+  onFlowReady 
+}: SiteMapFlowProps) {
   const [fitViewFunction, setFitViewFunction] = useState<(() => void) | null>(null);
   const [regridFunction, setRegridFunction] = useState<(() => void) | null>(null);
   const [zoomInFunction, setZoomInFunction] = useState<(() => void) | null>(null);
   const [zoomOutFunction, setZoomOutFunction] = useState<(() => void) | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<any[]>([]);
   const [isManuallyMoving, setIsManuallyMoving] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [hiddenCount, setHiddenCount] = useState(0);
   const nodeTypes = useMemo(() => ({
     iframeNode: IframeNode,
   }), []);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  
+  // Load edges from Firestore
+  useEffect(() => {
+    if (!projectId || !db) return;
+
+    const edgesRef = collection(db, `projects/${projectId}/edges`);
+    const q = query(edgesRef);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const firestoreEdges = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          source: data.source,
+          target: data.target,
+          type: data.type || 'smoothstep',
+          animated: data.animated || false,
+          label: data.label || '',
+          style: { stroke: '#4863B0', strokeWidth: 2 },
+        };
+      });
+      
+      console.log(`📊 Loaded ${firestoreEdges.length} edges`);
+      setEdges(firestoreEdges as Edge[]);
+    });
+
+    return () => unsubscribe();
+  }, [projectId, setEdges]);
   
   // Custom nodes change handler that respects manual movement
   const handleNodesChange = useCallback((changes: any[]) => {
@@ -111,7 +150,6 @@ export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange:
     // Normal behavior when not manually moving
     console.log('🎯 Normal node changes - may trigger re-gridding');
   }, [onNodesChange, isManuallyMoving]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!db) {
@@ -164,14 +202,46 @@ export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange:
       return;
     }
 
-    console.log('🔄 SiteMapFlow: updating nodes:', firestoreNodes.length, 'nodes');
-    setNodes(firestoreNodes);
+    // Filter nodes based on selected sitemap
+    let filteredNodes = firestoreNodes;
+    if (selectedSitemap !== 'All Sitemaps') {
+      filteredNodes = firestoreNodes.filter((node: any) => {
+        const nodeSitemap = node.data?.sitemapSource || node.sitemapSource;
+        return nodeSitemap === selectedSitemap;
+      });
+      console.log(`🔍 Filtered to ${filteredNodes.length} nodes from ${selectedSitemap}`);
+    }
+
+    // Filter out hidden nodes
+    const visibleNodes = filteredNodes.filter((node: any) => {
+      return !node.data?.isHidden;
+    });
+    
+    const currentHiddenCount = filteredNodes.length - visibleNodes.length;
+    
+    // Update counts
+    setVisibleCount(visibleNodes.length);
+    setHiddenCount(currentHiddenCount);
+    
+    if (currentHiddenCount > 0) {
+      console.log(`👁️ Hiding ${currentHiddenCount} nodes, showing ${visibleNodes.length}`);
+    }
+
+    // Apply selected layout
+    const layoutOptions = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    const layoutedNodes = applyLayout(visibleNodes, selectedLayout, layoutOptions);
+
+    console.log('🔄 SiteMapFlow: updating nodes with', selectedLayout, 'layout:', layoutedNodes.length, 'nodes');
+    setNodes(layoutedNodes);
     
     // Notify parent component of current nodes
     if (onNodesChangeCallback) {
-      onNodesChangeCallback(firestoreNodes);
+      onNodesChangeCallback(layoutedNodes);
     }
-  }, [firestoreNodes, setNodes, onNodesChangeCallback, isManuallyMoving]);
+  }, [firestoreNodes, setNodes, onNodesChangeCallback, isManuallyMoving, selectedSitemap, selectedLayout]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, style: { stroke: '#5B98D6' } }, eds)),
@@ -238,6 +308,39 @@ export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange:
     }
   }, [selectedNodes, nodes, setNodes, projectId]);
 
+  // Delete selected nodes
+  const handleDeleteSelected = useCallback(async () => {
+    if (selectedNodes.length === 0) return;
+
+    const confirmed = window.confirm(`Delete ${selectedNodes.length} node${selectedNodes.length > 1 ? 's' : ''}?`);
+    if (!confirmed) return;
+
+    // Delete each selected node
+    for (const node of selectedNodes) {
+      await handleDeleteNode(node.id);
+    }
+  }, [selectedNodes, handleDeleteNode]);
+
+  // Open external URL for selected node (single selection only)
+  const handleOpenExternal = useCallback(() => {
+    if (selectedNodes.length === 1) {
+      const url = selectedNodes[0].data?.url;
+      if (url) {
+        window.open(url, '_blank');
+      }
+    }
+  }, [selectedNodes]);
+
+  // Toggle iframe for selected node (single selection only)
+  const handleToggleIframe = useCallback(() => {
+    if (selectedNodes.length === 1) {
+      // This would need to be implemented in the node data
+      console.log('Toggle iframe for node:', selectedNodes[0].id);
+      // For now, just open in external tab
+      handleOpenExternal();
+    }
+  }, [selectedNodes, handleOpenExternal]);
+
   // Prevent automatic viewport changes that might cause drifting
   useEffect(() => {
     const handleViewportChange = (event: any) => {
@@ -257,15 +360,20 @@ export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange:
 
   if (loading) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-[#DDEEF9]">
-        <p className="text-[#1a1a1a]/60">Loading canvas...</p>
+      <div className="relative h-full w-full">
+        <CanvasLoader />
       </div>
     );
   }
 
 
   return (
-    <div className="h-full w-full">
+    <div className="relative h-full w-full">
+      {/* Loading Animation */}
+      <AnimatePresence>
+        {(loading || nodes.length === 0) && <CanvasLoader />}
+      </AnimatePresence>
+
       <AnimatePresence>
         <ReactFlow
           nodes={nodes}
@@ -288,6 +396,8 @@ export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange:
           elementsSelectable={true}
           selectNodesOnDrag={false}
           defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+          minZoom={0.1}
+          maxZoom={4}
           snapToGrid={false}
           snapGrid={[1, 1]}
           nodeDragThreshold={1}
@@ -305,15 +415,53 @@ export default function SiteMapFlow({ projectId = 'demo-project', onNodesChange:
         </ReactFlow>
       </AnimatePresence>
       
-      {/* Floating Controls */}
+      {/* Floating Controls - High z-index to stay on top */}
       <FloatingControls
-        onRegrid={() => regridFunction?.()}
+        projectId={projectId}
+        selectedSitemap={selectedSitemap}
+        selectedLayout={selectedLayout}
+        onSelectSitemap={onSelectSitemap || (() => {})}
+        onSelectLayout={onSelectLayout || (() => {})}
+        onBrowseSitemap={onBrowseSitemap}
         onFitView={() => fitViewFunction?.()}
-        onToggleHide={handleToggleHide}
-        selectedNodes={selectedNodes}
         onZoomIn={() => zoomInFunction?.()}
         onZoomOut={() => zoomOutFunction?.()}
       />
+
+      {/* Selection Toolbar */}
+      <SelectionToolbar
+        selectedNodes={selectedNodes}
+        onToggleIframe={handleToggleIframe}
+        onOpenExternal={handleOpenExternal}
+        onDelete={handleDeleteSelected}
+        onToggleVisibility={handleToggleHide}
+      />
+
+      {/* Node Stats Indicator */}
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.3, duration: 0.3 }}
+        className="pointer-events-none fixed right-8 top-20 z-50"
+      >
+        <div className="pointer-events-auto rounded-xl border border-[#5B98D6]/20 bg-white/95 px-3 py-1.5 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-[10px]">
+            <div className="flex items-center gap-1">
+              <div className="h-1.5 w-1.5 rounded-full bg-[#4863B0]" />
+              <span className="font-medium text-[#1a1a1a]">{visibleCount} shown</span>
+            </div>
+            {hiddenCount > 0 && (
+              <>
+                <div className="h-3 w-px bg-[#5B98D6]/20" />
+                <div className="flex items-center gap-1">
+                  <div className="h-1.5 w-1.5 rounded-full bg-[#1a1a1a]/20" />
+                  <span className="text-[#1a1a1a]/40">{hiddenCount} hidden</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 # Visual Sitemap Explorer - Project Status
 
-## Current Status: ✅ Core Features Implemented - Screenshot API Fixed
+## Current Status: ✅ Project-Based Sitemap Visualization Implemented
 
-The Atlas project has been fully scaffolded with Next.js, TypeScript, Tailwind CSS, Firebase, and React Flow. The screenshot API has been implemented with a production-ready multi-tier fallback approach.
+The Atlas project now supports a project-based workflow where each domain becomes a project. Users can input a domain, Atlas automatically checks for sitemap.xml, parses the sitemap, and creates an interactive visual diagram of all pages.
 
 ## Completed Items
 
@@ -42,23 +42,39 @@ The Atlas project has been fully scaffolded with Next.js, TypeScript, Tailwind C
 - [x] docs/screenshot-api.md - Screenshot implementation guide
 - [x] All technical docs updated
 
+### Phase 2: Project-Based Sitemap Import ✅
+- [x] `/api/sitemap` - Fetch and parse sitemap.xml from domain
+- [x] `/api/projects/create` - Create project with sitemap data
+- [x] CreateProjectModal component - UI for creating projects
+- [x] Dashboard - List projects with realtime updates
+- [x] Canvas - Display project's sitemap as interactive diagram
+- [x] Automatic sitemap detection (tries multiple common paths)
+- [x] Realtime node syncing via Firestore
+- [x] Project subcollections for nodes (`projects/{projectId}/nodes`)
+- [x] **Nested Sitemap Support** - Recursively fetches and parses sitemap indexes
+  - Automatically detects sitemap indexes
+  - Fetches all sub-sitemaps in parallel (up to 50)
+  - Supports up to 3 levels of nesting
+  - Aggregates all URLs from all sitemaps
+  - Handles up to 500 nodes per project
+
 ## Next Steps
 
-### Phase 2: Firebase Integration 🚧
-1. Implement Firebase Authentication
-2. Add Firestore CRUD operations
-3. Connect sitemap crawler to Firestore
-4. Implement screenshot upload to Storage
+### Phase 3: Screenshot Generation 🚧
+1. Integrate screenshot API for node thumbnails
+2. Generate thumbnails for sitemap URLs
+3. Display thumbnails in nodes
 
-### Phase 3: Realtime Collaboration 🚧
-1. Add Firestore listeners
-2. Implement presence tracking
-3. Handle concurrent updates
+### Phase 4: Firebase Authentication 🚧
+1. Implement Firebase Auth
+2. Add user-based project ownership
+3. Add project sharing/permissions
 
-### Phase 4: Enhancement 🚧
-1. Auto-layout algorithms
-2. Export functionality
-3. Advanced features
+### Phase 5: Advanced Features 🚧
+1. Auto-layout algorithms (hierarchical, grid)
+2. Export functionality (PNG, PDF)
+3. Page metadata extraction
+4. Search and filter
 
 ## Project Overview
 

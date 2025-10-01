@@ -39,6 +39,12 @@ SCREENSHOT_API_KEY=your-screenshot-api-key
 
 ## Overview
 
+Atlas uses a **project-based workflow** where each domain becomes a project:
+
+1. **Enter a domain** - Atlas automatically checks for `sitemap.xml`
+2. **Parse sitemap** - Extracts all URLs from the sitemap
+3. **Create diagram** - Visualizes pages as an interactive graph
+
 Each page is represented as a node that:
 - Shows a **thumbnail screenshot** (fast overview)
 - Can be toggled into an **iframe preview** (live view)

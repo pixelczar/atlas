@@ -58,6 +58,7 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
                 thumbnailUrl: data.thumbUrl,
                 status: data.metadata?.status || 'pending',
                 isHidden: data.isHidden || false,
+                sitemapSource: data.sitemapSource || 'sitemap.xml',
                 onDelete: onDeleteNode,
               },
             };
