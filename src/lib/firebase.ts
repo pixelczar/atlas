@@ -12,6 +12,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+// Debug Firebase config in production
+console.log('🔥 Firebase Config Debug:', {
+  hasApiKey: !!firebaseConfig.apiKey,
+  hasAuthDomain: !!firebaseConfig.authDomain,
+  hasProjectId: !!firebaseConfig.projectId,
+  hasStorageBucket: !!firebaseConfig.storageBucket,
+  hasMessagingSenderId: !!firebaseConfig.messagingSenderId,
+  hasAppId: !!firebaseConfig.appId,
+  projectId: firebaseConfig.projectId,
+  apiKey: firebaseConfig.apiKey?.slice(0, 10) + '...',
+});
+
 // Initialize Firebase
 let app: FirebaseApp;
 let db: Firestore;
