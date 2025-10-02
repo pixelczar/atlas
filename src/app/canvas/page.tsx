@@ -23,7 +23,19 @@ const SiteMapFlow = dynamic(() => import('@/components/flow/SiteMapFlow'), {
 
 function CanvasContent() {
   const searchParams = useSearchParams();
-  const projectId = searchParams.get('project') || 'demo-project';
+  const rawProjectId = searchParams.get('project') || 'demo-project';
+  const projectId = rawProjectId.trim();
+  
+  // Debug the projectId to check for newline characters
+  console.log('🔍 ProjectId debug:', {
+    raw: rawProjectId,
+    length: rawProjectId.length,
+    hasNewline: rawProjectId.includes('\n'),
+    hasCarriageReturn: rawProjectId.includes('\r'),
+    charCodes: rawProjectId.split('').map(c => c.charCodeAt(0)),
+    trimmed: projectId,
+    trimmedLength: projectId.length
+  });
   
   const [selectedSitemap, setSelectedSitemap] = useState('All Sitemaps');
   const [selectedLayout, setSelectedLayout] = useState<LayoutType>('dagre');

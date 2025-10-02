@@ -10,7 +10,21 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
   const lastNodesRef = useRef<Node[]>([]);
 
   useEffect(() => {
-    if (!projectId || projectId === 'demo-project') {
+    // Clean the projectId to remove any whitespace or newline characters
+    const cleanProjectId = projectId.trim();
+    
+    // Debug the projectId being passed to the hook
+    console.log('🔍 useRealtimeNodes projectId debug:', {
+      raw: projectId,
+      length: projectId.length,
+      hasNewline: projectId.includes('\n'),
+      hasCarriageReturn: projectId.includes('\r'),
+      charCodes: projectId.split('').map(c => c.charCodeAt(0)),
+      trimmed: cleanProjectId,
+      trimmedLength: cleanProjectId.length
+    });
+    
+    if (!cleanProjectId || cleanProjectId === 'demo-project') {
       console.log('🚫 Skipping Firestore listener - no valid project ID');
       setLoading(false);
       return;
@@ -22,9 +36,9 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
       return;
     }
 
-    console.log('🔥 Setting up Firestore listener for project:', projectId);
+    console.log('🔥 Setting up Firestore listener for project:', cleanProjectId);
     try {
-      const nodesRef = collection(db, `projects/${projectId}/nodes`);
+      const nodesRef = collection(db, `projects/${cleanProjectId}/nodes`);
       const q = query(nodesRef);
 
       const unsubscribe = onSnapshot(
