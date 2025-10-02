@@ -10,7 +10,8 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
   const lastNodesRef = useRef<Node[]>([]);
 
   useEffect(() => {
-    if (!projectId) {
+    if (!projectId || projectId === 'demo-project') {
+      console.log('🚫 Skipping Firestore listener - no valid project ID');
       setLoading(false);
       return;
     }
@@ -21,6 +22,7 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
       return;
     }
 
+    console.log('🔥 Setting up Firestore listener for project:', projectId);
     try {
       const nodesRef = collection(db, `projects/${projectId}/nodes`);
       const q = query(nodesRef);
