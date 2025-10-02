@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExternalLink, Maximize2, Minimize2, Trash2, Eye, EyeOff } from 'lucide-react';
 import { useMemo } from 'react';
+import { useReactFlow } from 'reactflow';
 
 interface SelectionToolbarProps {
   selectedNodes: any[];
@@ -19,47 +20,70 @@ export function SelectionToolbar({
   onDelete,
   onToggleVisibility,
 }: SelectionToolbarProps) {
+  const { flowToScreenPosition } = useReactFlow();
   const hasSelection = selectedNodes.length > 0;
   const isSingleSelection = selectedNodes.length === 1;
   const hasHiddenNodes = selectedNodes.some(node => node.data?.isHidden);
 
-  // Calculate position near selected nodes (appears to the right of selection)
+  // Calculate position above selected nodes (centered above selection)
   const toolbarPosition = useMemo(() => {
     if (selectedNodes.length === 0) return { x: 0, y: 0 };
 
-    // Find the rightmost and topmost selected node
-    const positions = selectedNodes.map(node => ({
-      x: node.position?.x || 0,
-      y: node.position?.y || 0,
-    }));
+    // Calculate the bounding box of all selected nodes
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    selectedNodes.forEach(node => {
+      const x = node.position?.x || 0;
+      const y = node.position?.y || 0;
+      const width = 288; // Standard node width
+      const height = 150; // Standard node height
+      
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + width);
+      maxY = Math.max(maxY, y + height);
+    });
+    
+    // Calculate the center of the selection horizontally
+    const selectionCenterX = minX + (maxX - minX) / 2;
+    const selectionTopY = minY;
+    
+    // Position toolbar so its bottom edge is 16px above the selection's top edge
+    // We need to account for the toolbar's actual height (~40px)
+    const flowToolbarCenterX = selectionCenterX;
+    const flowToolbarTopY = selectionTopY - 16 - 40; // 16px gap + toolbar height
 
-    const maxX = Math.max(...positions.map(p => p.x));
-    const minY = Math.min(...positions.map(p => p.y));
+    // Convert these flow coordinates to screen coordinates for absolute positioning
+    const screenPosition = flowToScreenPosition({ x: flowToolbarCenterX, y: flowToolbarTopY });
 
-    // Position toolbar to the right of the rightmost node
     return {
-      x: maxX + 320, // Card width (288) + some margin
-      y: minY,
+      x: screenPosition.x,
+      y: screenPosition.y,
     };
-  }, [selectedNodes]);
+  }, [selectedNodes.length, selectedNodes.map(n => `${n.position?.x},${n.position?.y}`).join(','), flowToScreenPosition]);
 
   return (
     <AnimatePresence>
       {hasSelection && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={{ opacity: 0, scale: 0.95 }}
           animate={{ 
             opacity: 1, 
             scale: 1,
-            x: toolbarPosition.x,
-            y: toolbarPosition.y,
           }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          className="pointer-events-auto absolute z-50"
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ 
+            duration: 0.2, 
+            ease: [0.16, 1, 0.3, 1]
+          }}
+          className="pointer-events-auto absolute z-30"
+          style={{
+            left: toolbarPosition.x,
+            top: toolbarPosition.y,
+            transform: 'translateX(-50%)', // Center the toolbar horizontally
+          }}
         >
           <div 
-            className="flex items-center gap-2 rounded-2xl border border-[#5B98D6]/20 bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
+            className="flex items-center gap-2 rounded-2xl bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -78,8 +102,6 @@ export function SelectionToolbar({
               {/* Toggle iframe - only for single selection */}
               {isSingleSelection && onToggleIframe && (
                 <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={onToggleIframe}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
                   title="Toggle preview"
@@ -91,8 +113,6 @@ export function SelectionToolbar({
               {/* Open external - only for single selection */}
               {isSingleSelection && onOpenExternal && (
                 <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={onOpenExternal}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
                   title="Open in new tab"
@@ -104,8 +124,6 @@ export function SelectionToolbar({
               {/* Toggle visibility */}
               {onToggleVisibility && (
                 <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={onToggleVisibility}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
                   title={hasHiddenNodes ? 'Show nodes' : 'Hide nodes'}
@@ -121,8 +139,6 @@ export function SelectionToolbar({
               {/* Delete */}
               {onDelete && (
                 <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={onDelete}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-50 hover:text-red-600"
                   title={`Delete ${selectedNodes.length} node${selectedNodes.length > 1 ? 's' : ''}`}

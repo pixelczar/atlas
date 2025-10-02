@@ -13,7 +13,7 @@ import ReactFlow, {
   type Edge,
 } from 'reactflow';
 import { AnimatePresence, motion } from 'framer-motion';
-import { doc, deleteDoc, writeBatch, Timestamp } from 'firebase/firestore';
+import { doc, deleteDoc, writeBatch, Timestamp, updateDoc } from 'firebase/firestore';
 
 import IframeNode from './IframeNode';
 import { FloatingControls } from '@/components/canvas/FloatingControls';
@@ -24,7 +24,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { applyLayout, LayoutType } from '@/lib/layout-algorithms';
 
-// Component that handles fitView functionality inside ReactFlow
+// Component that handles viewport helpers inside ReactFlow
 function FlowControls({ 
   onFlowReady, 
   nodes, 
@@ -32,42 +32,65 @@ function FlowControls({
   setFitViewFunction,
   setRegridFunction,
   setZoomInFunction,
-  setZoomOutFunction
+  setZoomOutFunction,
+  setFocusNodeFunction,
+  onFocusNode
 }: { 
-  onFlowReady?: (fitView: () => void, regrid: () => void) => void;
+  onFlowReady?: (noopFitView: () => void, regrid: () => void) => void;
   nodes: any[];
   projectId: string;
   setFitViewFunction: (fn: () => void) => void;
   setRegridFunction: (fn: () => void) => void;
   setZoomInFunction: (fn: () => void) => void;
   setZoomOutFunction: (fn: () => void) => void;
+  setFocusNodeFunction: (fn: (nodeId: string) => void) => void;
+  onFocusNode?: (focusNodeFn: (nodeId: string) => void) => void;
 }) {
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { zoomIn, zoomOut, setCenter, getViewport, setViewport } = useReactFlow();
+  const viewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  
+  // Save viewport every 100ms
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const vp = getViewport();
+      viewportRef.current = vp;
+    }, 100);
+    return () => clearInterval(interval);
+  }, [getViewport]);
 
-  const smoothFitView = useCallback(() => {
-    fitView({
-      duration: 800,
-      padding: 0.2,
-    });
-  }, [fitView]);
+  // Removed fitView usage entirely
+  const smoothFitView = useCallback(() => {}, []);
 
   const handleRegrid = useCallback(async () => {
-    // TODO: Re-apply hierarchical layout
-    // For now, just fit view to show all nodes
-    console.log('🎯 Fit view requested');
-    smoothFitView();
-  }, [smoothFitView]);
+    // DISABLED - Manual regrid only
+    // Do nothing
+  }, []);
+
+  const focusNode = useCallback((nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    // Calculate node center point
+    const nodeWidth = 288; // Standard node width
+    const nodeHeight = 150; // Standard node height
+    const x = node.position.x + nodeWidth / 2;
+    const y = node.position.y + nodeHeight / 2;
+
+    // Zoom to the node with a comfortable zoom level and animation
+    setCenter(x, y, { zoom: 1.0, duration: 800 });
+  }, [nodes, setCenter]);
 
   useEffect(() => {
-    setFitViewFunction(smoothFitView);
+    setFitViewFunction(() => {});
     setRegridFunction(handleRegrid);
     setZoomInFunction(() => zoomIn);
     setZoomOutFunction(() => zoomOut);
+    setFocusNodeFunction(() => focusNode);
     
-    if (onFlowReady) {
-      onFlowReady(smoothFitView, handleRegrid);
+    if (onFocusNode) {
+      onFocusNode(focusNode);
     }
-  }, [onFlowReady, smoothFitView, handleRegrid, setFitViewFunction, setRegridFunction, setZoomInFunction, setZoomOutFunction, zoomIn, zoomOut]);
+  }, [onFocusNode, handleRegrid, setFitViewFunction, setRegridFunction, setZoomInFunction, setZoomOutFunction, setFocusNodeFunction, zoomIn, zoomOut, focusNode]);
 
   return null; // This component doesn't render anything
 }
@@ -76,31 +99,41 @@ interface SiteMapFlowProps {
   projectId?: string;
   selectedSitemap?: string;
   selectedLayout?: LayoutType;
+  searchTerm?: string;
   onSelectSitemap?: (sitemap: string) => void;
   onSelectLayout?: (layout: LayoutType) => void;
   onBrowseSitemap?: () => void;
-  onNodesChange?: (nodes: any[]) => void;
   onFlowReady?: (fitView: () => void, regrid: () => void) => void;
+  onPreviewOpen?: (url: string) => void;
+  onFocusNode?: (focusNodeFn: (nodeId: string) => void) => void;
 }
 
 export default function SiteMapFlow({
   projectId = 'demo-project',
   selectedSitemap = 'All Sitemaps',
-  selectedLayout = 'tree',
+  selectedLayout = 'dagre',
+  searchTerm = '',
   onSelectSitemap,
   onSelectLayout,
   onBrowseSitemap,
-  onNodesChange: onNodesChangeCallback, 
-  onFlowReady 
+  onFlowReady,
+  onPreviewOpen,
+  onFocusNode
 }: SiteMapFlowProps) {
   const [fitViewFunction, setFitViewFunction] = useState<(() => void) | null>(null);
   const [regridFunction, setRegridFunction] = useState<(() => void) | null>(null);
   const [zoomInFunction, setZoomInFunction] = useState<(() => void) | null>(null);
   const [zoomOutFunction, setZoomOutFunction] = useState<(() => void) | null>(null);
+  const [focusNodeFunction, setFocusNodeFunction] = useState<((nodeId: string) => void) | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<any[]>([]);
   const [isManuallyMoving, setIsManuallyMoving] = useState(false);
   const [visibleCount, setVisibleCount] = useState(0);
   const [hiddenCount, setHiddenCount] = useState(0);
+  const [hasInitialNodes, setHasInitialNodes] = useState(false);
+  const [needsInitialFitView, setNeedsInitialFitView] = useState(false);
+  const savedViewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null);
+  const lastFirestoreNodesRef = useRef<any[]>([]);
+  const reactFlowInstance = useRef<any>(null);
   const nodeTypes = useMemo(() => ({
     iframeNode: IframeNode,
   }), []);
@@ -124,7 +157,7 @@ export default function SiteMapFlow({
           type: data.type || 'smoothstep',
           animated: data.animated || false,
           label: data.label || '',
-          style: { stroke: '#4863B0', strokeWidth: 2 },
+          style: { stroke: '#5B98D6', strokeWidth: 2 },
         };
       });
       
@@ -137,18 +170,37 @@ export default function SiteMapFlow({
   
   // Custom nodes change handler that respects manual movement
   const handleNodesChange = useCallback((changes: any[]) => {
-    // Always apply changes to React Flow
-    onNodesChange(changes);
+    // CRITICAL FIX: Filter out mass 'select' changes that cause zoom-out
+    // When you click a node, React Flow sends 'select' changes for ALL nodes
+    // This causes it to zoom out to fit all nodes
+    const filteredChanges = changes.filter(change => {
+      // Allow position changes (dragging)
+      if (change.type === 'position') return true;
+      // Allow dimension changes
+      if (change.type === 'dimensions') return true;
+      // Allow remove changes
+      if (change.type === 'remove') return true;
+      // Allow add changes
+      if (change.type === 'add') return true;
+      // Block mass select changes (more than 10 at once)
+      if (change.type === 'select' && changes.length > 10) {
+        return false;
+      }
+      // Allow individual select changes
+      if (change.type === 'select') return true;
+      // Allow other changes
+      return true;
+    });
     
-    // If manually moving, sync to Firestore but don't trigger re-gridding
-    if (isManuallyMoving) {
-      console.log('🎯 Syncing manual position changes to Firestore');
-      // TODO: Add Firestore sync for manual position changes
-      return;
+    // Only apply if we have filtered changes
+    if (filteredChanges.length > 0) {
+      onNodesChange(filteredChanges);
     }
     
-    // Normal behavior when not manually moving
-    console.log('🎯 Normal node changes - may trigger re-gridding');
+    // If manually moving, just return - no re-gridding
+    if (isManuallyMoving) {
+      return;
+    }
   }, [onNodesChange, isManuallyMoving]);
 
   const handleDeleteNode = useCallback(async (nodeId: string) => {
@@ -198,9 +250,22 @@ export default function SiteMapFlow({
   useEffect(() => {
     // Skip updates if manually moving nodes
     if (isManuallyMoving) {
-      console.log('⏸️ SiteMapFlow: skipping update - manually moving nodes');
       return;
     }
+    
+    // CRITICAL FIX: If we already have initial layout, ignore Firestore updates completely
+    // This prevents zoom-out when Firestore sends updates on node selection
+    if (hasInitialNodes) {
+      console.log('⏸️ Ignoring Firestore update - already have initial layout');
+      return;
+    }
+    
+    // Check if this is actually a new update or just a re-trigger
+    if (lastFirestoreNodesRef.current === firestoreNodes) {
+      console.log('⏸️ Skipping - same Firestore nodes reference');
+      return;
+    }
+    lastFirestoreNodesRef.current = firestoreNodes;
 
     // Filter nodes based on selected sitemap
     let filteredNodes = firestoreNodes;
@@ -217,67 +282,107 @@ export default function SiteMapFlow({
       return !node.data?.isHidden;
     });
     
+    // Add search highlighting to nodes
+    const highlightedNodes = visibleNodes.map((node: any) => {
+      const isHighlighted = searchTerm && (
+        node.data?.url?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        node.data?.label?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          isHighlighted: !!isHighlighted,
+          searchTerm: searchTerm
+        }
+      };
+    });
+    
     const currentHiddenCount = filteredNodes.length - visibleNodes.length;
     
     // Update counts
     setVisibleCount(visibleNodes.length);
     setHiddenCount(currentHiddenCount);
     
-    if (currentHiddenCount > 0) {
-      console.log(`👁️ Hiding ${currentHiddenCount} nodes, showing ${visibleNodes.length}`);
-    }
 
-    // Apply selected layout
-    const layoutOptions = {
-      width: window.innerWidth,
-      height: window.innerHeight,
-    };
-    const layoutedNodes = applyLayout(visibleNodes, selectedLayout, layoutOptions);
-
-    console.log('🔄 SiteMapFlow: updating nodes with', selectedLayout, 'layout:', layoutedNodes.length, 'nodes');
-    setNodes(layoutedNodes);
-    
-    // Notify parent component of current nodes
-    if (onNodesChangeCallback) {
-      onNodesChangeCallback(layoutedNodes);
+    // Only apply initial layout once when nodes first load, then never again
+    if (highlightedNodes.length > 0) {
+      // Apply initial layout only once
+      const layoutOptions = {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      };
+      const layoutedNodes = applyLayout(highlightedNodes, selectedLayout, layoutOptions);
+      setNodes(layoutedNodes);
+      setHasInitialNodes(true);
+      setNeedsInitialFitView(true);
     }
-  }, [firestoreNodes, setNodes, onNodesChangeCallback, isManuallyMoving, selectedSitemap, selectedLayout]);
+  }, [firestoreNodes, isManuallyMoving, selectedSitemap, hasInitialNodes]);
 
   const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge({ ...params, style: { stroke: '#5B98D6' } }, eds)),
+    (params: Connection) => setEdges((eds) => addEdge({ 
+      ...params, 
+      style: { 
+        stroke: '#5B98D6',
+        strokeWidth: 2,
+      },
+      type: 'smoothstep',
+      animated: false,
+    }, eds)),
     [setEdges]
   );
 
-  // Handle node selection changes
+  // Handle node selection changes - lightweight, no Firebase sync
   const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: any[] }) => {
-    setSelectedNodes(selectedNodes);
+    // Only update if selection actually changed to prevent unnecessary re-renders
+    setSelectedNodes(prev => {
+      if (prev.length !== selectedNodes.length || 
+          !prev.every((node, i) => node.id === selectedNodes[i]?.id)) {
+        return selectedNodes;
+      }
+      return prev; // No change, return same reference
+    });
   }, []);
+
 
   // Handle node drag start
   const onNodeDragStart = useCallback((event: any, node: any) => {
     setIsManuallyMoving(true);
-    console.log('🎯 Manual node movement started for node:', node.id, '- disabling auto re-gridding');
   }, []);
 
-  // Handle node drag stop
-  const onNodeDragStop = useCallback((event: any, node: any) => {
-    // Keep isManuallyMoving true for longer to prevent auto re-gridding
+  // Handle node drag stop - save position to Firestore
+  const onNodeDragStop = useCallback(async (event: any, node: any) => {
+    setIsManuallyMoving(false);
+    
+    // Save position to Firestore
+    try {
+      const nodeRef = doc(db, `projects/${projectId}/nodes`, node.id);
+      await updateDoc(nodeRef, {
+        position: node.position,
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error saving node position:', error);
+    }
+    
+    // Re-enable auto layout after a short delay
     setTimeout(() => {
       setIsManuallyMoving(false);
-      console.log('🎯 Manual node movement stopped for node:', node.id, '- re-enabling auto re-gridding');
-    }, 2000); // Increased delay to 2 seconds
-  }, []);
+    }, 500);
+  }, [projectId]);
 
   // Toggle hide state for selected nodes
-  const handleToggleHide = useCallback(async () => {
-    if (selectedNodes.length === 0) return;
+  const handleToggleHide = useCallback(async (nodeId?: string) => {
+    const targetNodes = nodeId ? [nodes.find(n => n.id === nodeId)].filter(Boolean) : selectedNodes;
+    if (targetNodes.length === 0) return;
 
-    const hasHiddenNodes = selectedNodes.some(node => node.data?.isHidden);
+    const hasHiddenNodes = targetNodes.some(node => node.data?.isHidden);
     const newHiddenState = !hasHiddenNodes;
 
     // Update nodes with new hidden state
     const updatedNodes = nodes.map(node => {
-      if (selectedNodes.some(selected => selected.id === node.id)) {
+      if (targetNodes.some(selected => selected.id === node.id)) {
         return {
           ...node,
           data: {
@@ -294,7 +399,7 @@ export default function SiteMapFlow({
     // Update in Firestore
     try {
       const batch = writeBatch(db);
-      selectedNodes.forEach(node => {
+      targetNodes.forEach(node => {
         const nodeRef = doc(db, `projects/${projectId}/nodes`, node.id);
         batch.update(nodeRef, {
           isHidden: newHiddenState,
@@ -302,7 +407,7 @@ export default function SiteMapFlow({
         });
       });
       await batch.commit();
-      console.log(`✅ ${newHiddenState ? 'Hidden' : 'Shown'} ${selectedNodes.length} nodes`);
+      console.log(`✅ ${newHiddenState ? 'Hidden' : 'Shown'} ${targetNodes.length} nodes`);
     } catch (error) {
       console.error('Error updating node visibility:', error);
     }
@@ -321,25 +426,29 @@ export default function SiteMapFlow({
     }
   }, [selectedNodes, handleDeleteNode]);
 
+
   // Open external URL for selected node (single selection only)
-  const handleOpenExternal = useCallback(() => {
-    if (selectedNodes.length === 1) {
-      const url = selectedNodes[0].data?.url;
-      if (url) {
-        window.open(url, '_blank');
-      }
+  const handleOpenExternal = useCallback((nodeId?: string) => {
+    const targetNode = nodeId ? nodes.find(n => n.id === nodeId) : (selectedNodes.length === 1 ? selectedNodes[0] : null);
+    if (targetNode?.data?.url) {
+      window.open(targetNode.data.url, '_blank');
     }
-  }, [selectedNodes]);
+  }, [selectedNodes, nodes]);
 
   // Toggle iframe for selected node (single selection only)
-  const handleToggleIframe = useCallback(() => {
-    if (selectedNodes.length === 1) {
-      // This would need to be implemented in the node data
-      console.log('Toggle iframe for node:', selectedNodes[0].id);
-      // For now, just open in external tab
-      handleOpenExternal();
+  const handleToggleIframe = useCallback((nodeId?: string) => {
+    const targetNode = nodeId ? nodes.find(n => n.id === nodeId) : (selectedNodes.length === 1 ? selectedNodes[0] : null);
+    if (targetNode?.data?.url && onPreviewOpen) {
+      onPreviewOpen(targetNode.data.url);
+      
+      // Focus and zoom to the selected node
+      if (focusNodeFunction) {
+        setTimeout(() => {
+          focusNodeFunction(targetNode.id);
+        }, 100); // Small delay to ensure preview panel animation starts
+      }
     }
-  }, [selectedNodes, handleOpenExternal]);
+  }, [selectedNodes, nodes, onPreviewOpen, focusNodeFunction]);
 
   // Prevent automatic viewport changes that might cause drifting
   useEffect(() => {
@@ -358,6 +467,20 @@ export default function SiteMapFlow({
     };
   }, []);
 
+  // Add toolbar functions to nodes
+  const nodesWithToolbar = useMemo(() => {
+    return nodes.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        onToggleIframe: () => handleToggleIframe(node.id),
+        onOpenExternal: () => handleOpenExternal(node.id),
+        onToggleVisibility: () => handleToggleHide(node.id),
+        // Delete button removed - doesn't make sense in this context
+      }
+    }));
+  }, [nodes, handleToggleIframe, handleOpenExternal, handleToggleHide]);
+
   if (loading) {
     return (
       <div className="relative h-full w-full">
@@ -366,17 +489,11 @@ export default function SiteMapFlow({
     );
   }
 
-
   return (
     <div className="relative h-full w-full">
-      {/* Loading Animation */}
-      <AnimatePresence>
-        {(loading || nodes.length === 0) && <CanvasLoader />}
-      </AnimatePresence>
-
       <AnimatePresence>
         <ReactFlow
-          nodes={nodes}
+          nodes={nodesWithToolbar}
           edges={edges}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
@@ -384,23 +501,44 @@ export default function SiteMapFlow({
           onSelectionChange={onSelectionChange}
           onNodeDragStart={onNodeDragStart}
           onNodeDragStop={onNodeDragStop}
+          onInit={(instance) => { 
+            reactFlowInstance.current = instance;
+            // Fit to view on initial load if needed
+            if (needsInitialFitView) {
+              setTimeout(() => {
+                instance.fitView({ duration: 300, padding: 0.2 });
+                setNeedsInitialFitView(false);
+              }, 100);
+            }
+          }}
           nodeTypes={nodeTypes}
           className="bg-[#DDEEF9]"
           panOnDrag={true}
           panOnScroll={false}
           zoomOnScroll={true}
           zoomOnPinch={true}
-          preventScrolling={false}
+          preventScrolling={true}
           nodesDraggable={true}
           nodesConnectable={false}
           elementsSelectable={true}
           selectNodesOnDrag={false}
-          defaultViewport={{ x: 0, y: 0, zoom: 1 }}
           minZoom={0.1}
           maxZoom={4}
-          snapToGrid={false}
-          snapGrid={[1, 1]}
-          nodeDragThreshold={1}
+          proOptions={{ hideAttribution: true }}
+          nodesFocusable={false}
+          edgesFocusable={false}
+          autoPanOnNodeDrag={false}
+          autoPanOnConnect={false}
+          elevateNodesOnSelect={false}
+          zoomActivationKeyCode={null}
+          nodeOrigin={[0, 0]}
+          translateExtent={[[-Infinity, -Infinity], [Infinity, Infinity]]}
+          deleteKeyCode={null}
+          multiSelectionKeyCode={null}
+          style={{
+            imageRendering: 'crisp-edges',
+            backfaceVisibility: 'hidden',
+          }} 
         >
           <FlowControls 
             onFlowReady={onFlowReady} 
@@ -410,8 +548,12 @@ export default function SiteMapFlow({
             setRegridFunction={setRegridFunction}
             setZoomInFunction={setZoomInFunction}
             setZoomOutFunction={setZoomOutFunction}
+            setFocusNodeFunction={setFocusNodeFunction}
+            onFocusNode={onFocusNode}
           />
           <Background gap={16} size={1} className="bg-[#DDEEF9]" color="#5B98D6" />
+          
+          {/* Selection Toolbar removed - now handled inside each node */}
         </ReactFlow>
       </AnimatePresence>
       
@@ -428,21 +570,12 @@ export default function SiteMapFlow({
         onZoomOut={() => zoomOutFunction?.()}
       />
 
-      {/* Selection Toolbar */}
-      <SelectionToolbar
-        selectedNodes={selectedNodes}
-        onToggleIframe={handleToggleIframe}
-        onOpenExternal={handleOpenExternal}
-        onDelete={handleDeleteSelected}
-        onToggleVisibility={handleToggleHide}
-      />
-
       {/* Node Stats Indicator */}
       <motion.div
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 0.3, duration: 0.3 }}
-        className="pointer-events-none fixed right-8 top-20 z-50"
+        className="pointer-events-none fixed right-8 top-20 z-30"
       >
         <div className="pointer-events-auto rounded-xl border border-[#5B98D6]/20 bg-white/95 px-3 py-1.5 shadow-lg backdrop-blur-sm">
           <div className="flex items-center gap-2 text-[10px]">

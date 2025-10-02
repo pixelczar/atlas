@@ -1,17 +1,17 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { AtlasLogo } from '@/components/ui/AtlasLogo';
 import { Download, Share2 } from 'lucide-react';
-import { AddNodeInput } from '@/components/canvas/AddNodeInput';
 import { SitemapBrowser } from '@/components/projects/SitemapBrowser';
 import { ProjectSidebar } from '@/components/canvas/ProjectSidebar';
 import { Breadcrumb } from '@/components/canvas/Breadcrumb';
-import { addNodeToFirestore, calculateNewNodePosition } from '@/lib/node-operations';
+import { IframePreviewPanel } from '@/components/canvas/IframePreviewPanel';
 import { LayoutType } from '@/lib/layout-algorithms';
 
 // Dynamic import to avoid SSR issues with React Flow
@@ -20,62 +20,66 @@ const SiteMapFlow = dynamic(() => import('@/components/flow/SiteMapFlow'), {
   loading: () => null, // No loading state here - handled inside SiteMapFlow
 });
 
-export default function CanvasPage() {
+function CanvasContent() {
   const searchParams = useSearchParams();
   const projectId = searchParams.get('project') || 'demo-project';
   
-  const [isAddingNode, setIsAddingNode] = useState(false);
-  const [existingNodes, setExistingNodes] = useState<any[]>([]);
-  const [fitViewFunction, setFitViewFunction] = useState<(() => void) | null>(null);
   const [selectedSitemap, setSelectedSitemap] = useState('All Sitemaps');
-  const [selectedLayout, setSelectedLayout] = useState<LayoutType>('tree');
+  const [selectedLayout, setSelectedLayout] = useState<LayoutType>('dagre');
   const [showBrowser, setShowBrowser] = useState(false);
   const [showProjectSidebar, setShowProjectSidebar] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [iframePreviewUrl, setIframePreviewUrl] = useState<string | null>(null);
+  const [focusNodeFn, setFocusNodeFn] = useState<((nodeId: string) => void) | null>(null);
 
-  const handleAddNode = useCallback(async (url: string) => {
-    setIsAddingNode(true);
-    try {
-      const userId = 'demo-user'; // TODO: Get from auth context
-      
-      // Calculate position for new node using existing nodes
-      const position = calculateNewNodePosition(existingNodes, { x: 400, y: 200 });
-      
-      // Add node to Firestore (triggers screenshot generation)
-      await addNodeToFirestore(projectId, url, position, userId);
-      
-      console.log('✅ Node added:', { url, position });
-      
-      // Don't auto-fit view - let user control the viewport
-    } catch (error) {
-      console.error('Error adding node:', error);
-      alert(`Error: ${error instanceof Error ? error.message : 'Failed to add node'}\n\nFirebase might not be fully configured.`);
-    } finally {
-      setIsAddingNode(false);
+  const handleFlowReady = useCallback((_: () => void, __: () => void) => {
+    console.log('🎯 Flow ready');
+  }, []);
+
+  const handleFocusNode = useCallback((focusNodeFunction: (nodeId: string) => void) => {
+    setFocusNodeFn(() => focusNodeFunction);
+  }, []);
+
+  const handleSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+  }, []);
+
+  const handlePreviewOpen = useCallback((url: string) => {
+    setIframePreviewUrl(url);
+  }, []);
+
+  const handlePreviewClose = useCallback(() => {
+    setIframePreviewUrl(null);
+  }, []);
+
+  const handleNodeClick = useCallback((nodeId: string) => {
+    console.log('🎯 Focusing on node from browser:', nodeId);
+    if (focusNodeFn) {
+      focusNodeFn(nodeId);
     }
-  }, [existingNodes, fitViewFunction]);
+  }, [focusNodeFn]);
 
-  const handleNodesChange = useCallback((nodes: any[]) => {
-    setExistingNodes(nodes);
-  }, []);
-
-  const handleFlowReady = useCallback((fitView: () => void, regrid: () => void) => {
-    setFitViewFunction(() => fitView);
-    
-    // Don't auto-fit view on load - let user control the viewport
-    console.log('🎯 Flow ready, fitView function set');
-  }, []);
+  const handlePagePreview = useCallback((nodeId: string, url: string) => {
+    console.log('🎯 Opening preview for:', url);
+    // Open the preview
+    handlePreviewOpen(url);
+    // Focus on the node
+    if (focusNodeFn) {
+      focusNodeFn(nodeId);
+    }
+  }, [focusNodeFn, handlePreviewOpen]);
 
   return (
     <div className="flex h-screen flex-col bg-[#DDEEF9]">
       {/* Toolbar */}
       <div className="flex items-center justify-between border-b border-[#5B98D6]/20 bg-[#DDEEF9] px-3 py-1.5">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {/* Atlas Logo - triggers sidebar */}
           <button
             onClick={() => setShowProjectSidebar(true)}
             className="transition-opacity hover:opacity-70"
           >
-            <AtlasLogo size="sm" />
+            <AtlasLogo size="md" />
           </button>
 
           {/* Breadcrumb */}
@@ -83,16 +87,13 @@ export default function CanvasPage() {
             projectId={projectId}
             selectedSitemap={selectedSitemap}
             onSitemapClick={() => setShowBrowser(true)}
+            onSelectSitemap={setSelectedSitemap}
+            onSearchChange={handleSearchChange}
+            onPageClick={handleNodeClick}
+            onPagePreview={handlePagePreview}
           />
         </div>
         <div className="flex items-center gap-2">
-          {/* Add Node Input */}
-          <div className="w-52">
-            <AddNodeInput onAddNode={handleAddNode} isLoading={isAddingNode} />
-          </div>
-          
-          <div className="h-4 w-px bg-[#5B98D6]/20" />
-          
           <Button
             variant="outline"
             size="sm"
@@ -111,18 +112,33 @@ export default function CanvasPage() {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1">
-        <SiteMapFlow 
-          projectId={projectId}
-          selectedSitemap={selectedSitemap}
-          selectedLayout={selectedLayout}
-          onSelectSitemap={setSelectedSitemap}
-          onSelectLayout={setSelectedLayout}
-          onBrowseSitemap={() => setShowBrowser(true)}
-          onNodesChange={handleNodesChange} 
-          onFlowReady={handleFlowReady}
-        />
+      {/* Canvas + Preview Panel Container */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Canvas */}
+        <div className="flex-1 relative">
+          <SiteMapFlow 
+            projectId={projectId}
+            selectedSitemap={selectedSitemap}
+            selectedLayout={selectedLayout}
+            searchTerm={searchTerm}
+            onSelectSitemap={setSelectedSitemap}
+            onSelectLayout={setSelectedLayout}
+            onBrowseSitemap={() => setShowBrowser(true)}
+            onFlowReady={handleFlowReady}
+            onPreviewOpen={handlePreviewOpen}
+            onFocusNode={handleFocusNode}
+          />
+        </div>
+
+        {/* Preview Panel */}
+        <AnimatePresence>
+          {iframePreviewUrl && (
+            <IframePreviewPanel 
+              url={iframePreviewUrl}
+              onClose={handlePreviewClose}
+            />
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Sitemap Browser Modal */}
@@ -130,6 +146,7 @@ export default function CanvasPage() {
         isOpen={showBrowser}
         onClose={() => setShowBrowser(false)}
         projectId={projectId}
+        onNodeClick={handleNodeClick}
       />
 
       {/* Project Sidebar */}
@@ -139,5 +156,13 @@ export default function CanvasPage() {
         currentProjectId={projectId}
       />
     </div>
+  );
+}
+
+export default function CanvasPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CanvasContent />
+    </Suspense>
   );
 }

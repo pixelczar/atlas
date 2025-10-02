@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Public_Sans, Instrument_Serif } from 'next/font/google';
 import './globals.css';
-import 'reactflow/dist/style.css';
 
 const publicSans = Public_Sans({ 
   subsets: ['latin'],

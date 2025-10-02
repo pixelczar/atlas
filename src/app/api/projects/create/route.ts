@@ -10,7 +10,7 @@ import { buildURLHierarchy, calculateTreeLayout, createHierarchyEdges } from '@/
  */
 export async function POST(request: NextRequest) {
   try {
-    const { name, domain, sitemapUrl, urls } = await request.json();
+    const { name, domain, sitemapUrl, urls, urlCount, sitemaps } = await request.json();
 
     if (!name || !domain || !sitemapUrl || !urls) {
       return NextResponse.json(
@@ -19,15 +19,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract unique sitemap sources
-    const sitemapSources = [...new Set(urls.map((u: any) => u.sitemapSource).filter(Boolean))];
+    // Extract unique sitemap sources (fallback if not provided)
+    const sitemapSources = sitemaps || [...new Set(urls.map((u: any) => u.sitemapSource).filter(Boolean))];
     
     // Create project document
     const projectRef = await addDoc(collection(db, 'projects'), {
       name,
       domain,
       sitemapUrl,
-      urlCount: urls.length,
+      urlCount: urlCount || urls.length, // Use provided count or fallback to urls length
       sitemaps: sitemapSources, // Store list of all sitemap files
       ownerId: 'anonymous', // TODO: Replace with actual user ID from auth
       settings: {

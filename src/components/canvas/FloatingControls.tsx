@@ -3,7 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { ZoomIn, ZoomOut, Maximize2, FileText, ChevronDown, Check, List, Grid3x3, Columns, CircleDot, Sparkles, GitBranch, LayoutGrid, Network } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { LayoutType } from '@/lib/layout-algorithms';
 
@@ -27,10 +27,11 @@ export function FloatingControls({
   onSelectLayout,
   onFitView, 
   onZoomIn, 
-  onZoomOut,
+  onZoomOut, 
   onBrowseSitemap,
 }: FloatingControlsProps) {
   const [sitemaps, setSitemaps] = useState<string[]>([]);
+  const [sitemapCounts, setSitemapCounts] = useState<Record<string, number>>({});
   const [isSitemapOpen, setIsSitemapOpen] = useState(false);
   const [isLayoutOpen, setIsLayoutOpen] = useState(false);
 
@@ -46,6 +47,19 @@ export function FloatingControls({
           const data = projectSnap.data();
           const sitemapList = data.sitemaps || [];
           setSitemaps(['All Sitemaps', ...sitemapList]);
+          
+          // Fetch nodes to count URLs per sitemap
+          const nodesRef = collection(db, `projects/${projectId}/nodes`);
+          const nodesSnapshot = await getDocs(query(nodesRef));
+          
+          const counts: Record<string, number> = { 'All Sitemaps': nodesSnapshot.size };
+          
+          nodesSnapshot.docs.forEach(doc => {
+            const sitemapSource = doc.data().sitemapSource || 'sitemap.xml';
+            counts[sitemapSource] = (counts[sitemapSource] || 0) + 1;
+          });
+          
+          setSitemapCounts(counts);
         }
       } catch (error) {
         console.error('Error fetching sitemaps:', error);
@@ -59,11 +73,8 @@ export function FloatingControls({
 
   const layoutOptions: { value: LayoutType; label: string; icon: any }[] = [
     { value: 'grid', label: 'Grid', icon: Grid3x3 },
-    { value: 'depth-columns', label: 'Depth Columns', icon: Columns },
-    { value: 'radial', label: 'Radial', icon: CircleDot },
     { value: 'tree', label: 'Tree', icon: GitBranch },
     { value: 'dagre', label: 'Dagre', icon: Network },
-    { value: 'force', label: 'Force', icon: Sparkles },
   ];
 
   const currentLayout = layoutOptions.find(l => l.value === selectedLayout) || layoutOptions[0];
@@ -73,18 +84,16 @@ export function FloatingControls({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2, duration: 0.3 }}
-      className="pointer-events-none fixed inset-x-0 bottom-8 z-[100] flex justify-center"
+      className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex justify-center"
     >
       <div 
-        className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-[#5B98D6]/20 bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
+        className="pointer-events-auto flex items-center gap-2 rounded-2xl  bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Layout Switcher */}
         <div className="relative">
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
             onClick={() => setIsLayoutOpen(!isLayoutOpen)}
             className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
             title="Change layout"
@@ -151,13 +160,10 @@ export function FloatingControls({
           <>
             <div className="relative">
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={() => setIsSitemapOpen(!isSitemapOpen)}
                 className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
                 title="Switch sitemap view"
               >
-                <FileText className="h-3.5 w-3.5 text-[#4863B0]" />
                 <span className="max-w-[120px] truncate font-medium">{selectedSitemap}</span>
                 <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isSitemapOpen ? 'rotate-180' : ''}`} />
               </motion.button>
@@ -178,28 +184,45 @@ export function FloatingControls({
                       className="absolute bottom-full left-0 mb-2 min-w-[200px] rounded-xl border border-[#5B98D6]/20 bg-white/95 backdrop-blur-sm shadow-xl shadow-[#4863B0]/10 z-20"
                     >
                       <div className="p-2">
-                        {sitemaps.map((sitemap, index) => (
-                          <motion.button
-                            key={sitemap}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            onClick={() => {
-                              onSelectSitemap(sitemap);
-                              setIsSitemapOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${
-                              selectedSitemap === sitemap
-                                ? 'bg-[#5B98D6]/10 text-[#4863B0] font-medium'
-                                : 'text-[#1a1a1a] hover:bg-[#5B98D6]/5'
-                            }`}
-                          >
-                            <span className="truncate">{sitemap}</span>
-                            {selectedSitemap === sitemap && (
-                              <Check className="ml-2 h-3 w-3 flex-shrink-0 text-[#4863B0]" />
-                            )}
-                          </motion.button>
-                        ))}
+                        {sitemaps.map((sitemap, index) => {
+                          const count = sitemapCounts[sitemap] || 0;
+                          return (
+                            <motion.button
+                              key={sitemap}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.05 }}
+                              onClick={() => {
+                                onSelectSitemap(sitemap);
+                                setIsSitemapOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${
+                                selectedSitemap === sitemap
+                                  ? 'bg-[#5B98D6]/10 text-[#4863B0] font-medium'
+                                  : count === 0
+                                    ? 'text-[#1a1a1a]/30 cursor-not-allowed'
+                                    : 'text-[#1a1a1a] hover:bg-[#5B98D6]/5'
+                              }`}
+                              disabled={count === 0}
+                            >
+                              <span className="truncate">{sitemap}</span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-medium ${
+                                  selectedSitemap === sitemap 
+                                    ? 'text-[#4863B0]' 
+                                    : count === 0
+                                      ? 'text-[#1a1a1a]/30'
+                                      : 'text-[#1a1a1a]/50'
+                                }`}>
+                                  {count}
+                                </span>
+                                {selectedSitemap === sitemap && (
+                                  <Check className="h-3 w-3 flex-shrink-0 text-[#4863B0]" />
+                                )}
+                              </div>
+                            </motion.button>
+                          );
+                        })}
                       </div>
                     </motion.div>
                   </>
@@ -216,8 +239,6 @@ export function FloatingControls({
         {onBrowseSitemap && (
           <>
             <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
               onClick={onBrowseSitemap}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
               title="Browse all URLs"
@@ -232,33 +253,27 @@ export function FloatingControls({
 
         {/* Zoom In */}
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
           onClick={onZoomIn}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
           title="Zoom in"
         >
           <ZoomIn className="h-4 w-4" />
         </motion.button>
-        
+
         {/* Zoom Out */}
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
           onClick={onZoomOut}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
           title="Zoom out"
         >
           <ZoomOut className="h-4 w-4" />
         </motion.button>
-        
+
         {/* Divider */}
         <div className="h-5 w-px bg-[#5B98D6]/20" />
-        
+
         {/* Fit View */}
         <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
           onClick={onFitView}
           className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
           title="Center and fit all nodes in view"

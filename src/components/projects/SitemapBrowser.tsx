@@ -14,6 +14,7 @@ interface SitemapBrowserProps {
   onClose: () => void;
   projectId: string;
   projectName?: string;
+  onNodeClick?: (nodeId: string) => void;
 }
 
 export function SitemapBrowser({
@@ -21,6 +22,7 @@ export function SitemapBrowser({
   onClose,
   projectId,
   projectName = 'Project',
+  onNodeClick,
 }: SitemapBrowserProps) {
   const router = useRouter();
   const [nodes, setNodes] = useState<any[]>([]);
@@ -87,8 +89,6 @@ export function SitemapBrowser({
             >
               {/* Close button */}
               <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={onClose}
                 className="absolute right-6 top-6 text-[#1a1a1a]/40 hover:text-[#1a1a1a] transition-colors"
               >
@@ -151,7 +151,13 @@ export function SitemapBrowser({
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.02 }}
-                        className="group flex items-center justify-between p-4 hover:bg-[#5B98D6]/5 transition-colors"
+                        className="group flex items-center justify-between p-4 hover:bg-[#5B98D6]/5 transition-colors cursor-pointer"
+                        onClick={() => {
+                          if (onNodeClick) {
+                            onNodeClick(node.id);
+                            onClose();
+                          }
+                        }}
                       >
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium text-sm text-[#1a1a1a]">
@@ -162,9 +168,10 @@ export function SitemapBrowser({
                           </p>
                         </div>
                         <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => window.open(node.url, '_blank')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(node.url, '_blank');
+                          }}
                           className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/40 opacity-0 group-hover:opacity-100 transition-all hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
                         >
                           <ExternalLink className="h-4 w-4" />

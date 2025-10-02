@@ -7,6 +7,7 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
   const [nodes, setNodes] = useState<Node[]>([]);
   const [loading, setLoading] = useState(true);
   const lastUpdateRef = useRef<number>(0);
+  const lastNodesRef = useRef<Node[]>([]);
 
   useEffect(() => {
     if (!projectId) {
@@ -29,8 +30,8 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
         (snapshot) => {
           const now = Date.now();
           
-          // Only update if enough time has passed since last update (500ms minimum)
-          if (now - lastUpdateRef.current < 500) {
+          // Only update if enough time has passed since last update (1000ms minimum)
+          if (now - lastUpdateRef.current < 1000) {
             console.log('⏸️ Skipping update - too soon since last update');
             return;
           }
@@ -64,8 +65,15 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
             };
           });
 
-          console.log('🎯 Setting nodes:', firestoreNodes.length, 'nodes');
-          setNodes(firestoreNodes as Node[]);
+          // Only update if nodes actually changed to prevent unnecessary re-renders
+          const nodesChanged = JSON.stringify(firestoreNodes) !== JSON.stringify(lastNodesRef.current);
+          if (nodesChanged) {
+            console.log('🎯 Setting nodes:', firestoreNodes.length, 'nodes');
+            setNodes(firestoreNodes as Node[]);
+            lastNodesRef.current = firestoreNodes as Node[];
+          } else {
+            console.log('⏸️ Skipping update - nodes unchanged');
+          }
           lastUpdateRef.current = now;
           setLoading(false);
         },

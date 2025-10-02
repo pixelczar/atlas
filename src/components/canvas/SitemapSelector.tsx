@@ -48,8 +48,6 @@ export function SitemapSelector({
   return (
     <div className="relative">
       <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 rounded-xl border border-[#5B98D6]/20 bg-white/95 px-4 py-2 text-sm text-[#1a1a1a] backdrop-blur-sm shadow-lg shadow-[#4863B0]/10 transition-colors hover:border-[#4863B0]/40"
       >
