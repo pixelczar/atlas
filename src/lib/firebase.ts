@@ -35,9 +35,31 @@ if (getApps().length === 0) {
     projectId: firebaseConfig.projectId,
     apiKey: firebaseConfig.apiKey?.slice(0, 10) + '...',
   });
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app); // Uses (default) database
-  storage = getStorage(app);
+  
+  try {
+    app = initializeApp(firebaseConfig);
+    console.log('✅ Firebase app initialized');
+  } catch (error) {
+    console.error('❌ Firebase app initialization failed:', error);
+    throw error;
+  }
+  
+  try {
+    db = getFirestore(app); // Uses (default) database
+    console.log('✅ Firestore initialized');
+  } catch (error) {
+    console.error('❌ Firestore initialization failed:', error);
+    throw error;
+  }
+  
+  try {
+    storage = getStorage(app);
+    console.log('✅ Firebase Storage initialized');
+  } catch (error) {
+    console.error('❌ Firebase Storage initialization failed:', error);
+    throw error;
+  }
+  
   // Auth disabled until enabled in Firebase Console
   try {
     auth = getAuth(app);
