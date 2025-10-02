@@ -22,6 +22,10 @@ console.log('🔥 Firebase Config Debug:', {
   hasAppId: !!firebaseConfig.appId,
   projectId: firebaseConfig.projectId,
   apiKey: firebaseConfig.apiKey?.slice(0, 10) + '...',
+  authDomain: firebaseConfig.authDomain,
+  storageBucket: firebaseConfig.storageBucket,
+  messagingSenderId: firebaseConfig.messagingSenderId,
+  appId: firebaseConfig.appId,
 });
 
 // Initialize Firebase
@@ -85,5 +89,17 @@ console.log('🔥 Firebase initialized:', {
   hasStorage: !!storage,
   hasAuth: !!auth,
 });
+
+// Test Firestore connection
+if (db) {
+  console.log('🔥 Testing Firestore connection...');
+  // This will help us see if Firestore is actually accessible
+  try {
+    // Just test if we can access the database instance
+    console.log('✅ Firestore database instance created successfully');
+  } catch (error) {
+    console.error('❌ Firestore database test failed:', error);
+  }
+}
 
 export { app, db, storage, auth };

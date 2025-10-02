@@ -13,6 +13,7 @@ import { ProjectSidebar } from '@/components/canvas/ProjectSidebar';
 import { Breadcrumb } from '@/components/canvas/Breadcrumb';
 import { IframePreviewPanel } from '@/components/canvas/IframePreviewPanel';
 import { LayoutType } from '@/lib/layout-algorithms';
+import { testFirestoreConnection } from '@/lib/firestore-test';
 
 // Dynamic import to avoid SSR issues with React Flow
 const SiteMapFlow = dynamic(() => import('@/components/flow/SiteMapFlow'), {
@@ -50,6 +51,11 @@ function CanvasContent() {
 
   const handlePreviewClose = useCallback(() => {
     setIframePreviewUrl(null);
+  }, []);
+
+  // Test Firestore connection on mount
+  useEffect(() => {
+    testFirestoreConnection();
   }, []);
 
   const handleNodeClick = useCallback((nodeId: string) => {
