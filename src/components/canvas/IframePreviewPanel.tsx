@@ -117,7 +117,7 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
               <Globe className="h-3 w-3 text-[#1a1a1a]/60" />
               <div className="flex-1 rounded-md bg-[#5B98D6]/10 px-2 py-1">
                 <span className="text-[12px] text-[#1a1a1a]/70 truncate block">
-                  {url}
+                  {url} 
                 </span>
               </div>
             </div>
