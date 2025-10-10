@@ -3,28 +3,24 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
     
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Screenshots storage structure: /projects/{projectId}/screenshots/{nodeId}.png
-    match /projects/{projectId}/screenshots/{screenshotId} {
+    // Screenshots storage structure: /screenshots/{projectId}/{nodeId}.{ext}
+    match /screenshots/{projectId}/{screenshotId} {
       // Allow public read access for screenshots
       allow read: if true;
       
       // Allow write access for development (no auth required)
       // In production, add authentication back
       allow write: if 
-        // Ensure file is an image
-        request.resource.contentType.matches('image/.*') &&
+        // Ensure file is an image or SVG
+        (request.resource.contentType.matches('image/.*') || 
+         request.resource.contentType == 'image/svg+xml') &&
         // Limit file size to 5MB
         request.resource.size < 5 * 1024 * 1024;
     }
     
-    // Deny all other access
+    // Allow all other paths for development
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }

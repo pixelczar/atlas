@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       domain: normalizedDomain,
       sitemapUrl,
       urlCount: urls.length,
-      urls: urls.slice(0, 100), // Limit to first 100 URLs for initial display
+      urls: urls, // Return all URLs, no limit
       totalUrls: urls.length,
       sitemaps: sitemapSources, // List of all sitemap files found
     });

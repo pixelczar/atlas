@@ -58,7 +58,7 @@ export interface FirestoreEdge {
   source: string; // Source node ID
   target: string; // Target node ID
   label: string | null; // Link text or description
-  type: 'default' | 'smoothstep' | 'step';
+  type: 'default' | 'smoothstep' | 'step' | 'bezier';
   animated: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;

@@ -67,16 +67,45 @@ export function buildURLHierarchy(urls: Array<{ url: string; title?: string }>):
       const parentSegments = segments.slice(0, -1);
       const parentPath = parentSegments.length === 0 ? '/' : '/' + parentSegments.join('/');
       
-      const parentNode = nodeMap.get(parentPath);
+      let parentNode = nodeMap.get(parentPath);
+      
       if (parentNode) {
         node.parentPath = parentPath;
         parentNode.children.push(node.path);
       } else {
-        // Parent doesn't exist in sitemap, attach to root
-        const rootNode = nodeMap.get('/');
-        if (rootNode && node.path !== '/') {
-          node.parentPath = '/';
-          rootNode.children.push(node.path);
+        // Parent doesn't exist in sitemap, find closest existing parent
+        console.log(`🔍 No exact parent found for ${node.url}, looking for closest parent...`);
+        
+        let bestParent = null;
+        let bestMatchLength = 0;
+        
+        // Find all existing nodes and check if any is a prefix of current path
+        for (const [existingPath, existingNode] of nodeMap.entries()) {
+          if (existingNode === node) continue;
+          
+          // Check if this existing path is a prefix of the current path
+          if (node.path.startsWith(existingPath) && existingPath !== node.path) {
+            const matchLength = existingPath.split('/').filter(Boolean).length;
+            if (matchLength > bestMatchLength) {
+              bestParent = existingNode;
+              bestMatchLength = matchLength;
+              console.log(`🎯 Found better parent: ${existingPath} (match length: ${matchLength})`);
+            }
+          }
+        }
+        
+        if (bestParent) {
+          node.parentPath = bestParent.path;
+          bestParent.children.push(node.path);
+          console.log(`✅ Using closest parent: ${bestParent.path} for ${node.url}`);
+        } else {
+          // No suitable parent found, attach to root
+          const rootNode = nodeMap.get('/');
+          if (rootNode && node.path !== '/') {
+            node.parentPath = '/';
+            rootNode.children.push(node.path);
+            console.log(`🔗 Connecting ${node.url} to root (no suitable parent found)`);
+          }
         }
       }
     }

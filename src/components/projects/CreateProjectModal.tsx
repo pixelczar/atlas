@@ -562,9 +562,9 @@ export function CreateProjectModal({
                           {sitemapData.urls.slice(0, 10).map((item: any, i: number) => (
                             <motion.div
                               key={i}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: 0.4 + i * 0.05 }}
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.4 + i * 0.06, duration: 0.16 }}
                               className="truncate text-sm text-[#1a1a1a]/60 hover:text-[#4863B0] transition-colors"
                             >
                               {item.url}
@@ -605,7 +605,7 @@ export function CreateProjectModal({
                       >
                         {isLoading ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin opacity-50" />
                             Creating...
                           </>
                         ) : (

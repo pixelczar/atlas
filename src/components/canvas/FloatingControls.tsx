@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { ZoomIn, ZoomOut, Maximize2, FileText, ChevronDown, Check, List, Grid3x3, Columns, CircleDot, Sparkles, GitBranch, LayoutGrid, Network } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, FileText, ChevronDown, Check, List, Grid3x3, Columns, CircleDot, Sparkles, GitBranch, LayoutGrid, Network, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { doc, getDoc, collection, query, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -17,6 +17,7 @@ interface FloatingControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onBrowseSitemap?: () => void;
+  onResetLayout?: () => void;
 }
 
 export function FloatingControls({ 
@@ -29,11 +30,13 @@ export function FloatingControls({
   onZoomIn, 
   onZoomOut, 
   onBrowseSitemap,
+  onResetLayout,
 }: FloatingControlsProps) {
   const [sitemaps, setSitemaps] = useState<string[]>([]);
   const [sitemapCounts, setSitemapCounts] = useState<Record<string, number>>({});
   const [isSitemapOpen, setIsSitemapOpen] = useState(false);
   const [isLayoutOpen, setIsLayoutOpen] = useState(false);
+  const [isUpdatingEdges, setIsUpdatingEdges] = useState(false);
 
   useEffect(() => {
     const fetchSitemaps = async () => {
@@ -46,20 +49,42 @@ export function FloatingControls({
         if (projectSnap.exists()) {
           const data = projectSnap.data();
           const sitemapList = data.sitemaps || [];
-          setSitemaps(['All Sitemaps', ...sitemapList]);
+          setSitemaps(sitemapList);
           
           // Fetch nodes to count URLs per sitemap
           const nodesRef = collection(db, `projects/${projectId}/nodes`);
           const nodesSnapshot = await getDocs(query(nodesRef));
           
-          const counts: Record<string, number> = { 'All Sitemaps': nodesSnapshot.size };
+          console.log('🔍 Sitemap counts - Total nodes fetched:', nodesSnapshot.size);
           
+          const counts: Record<string, number> = {};
+          
+          // Count nodes per individual sitemap
           nodesSnapshot.docs.forEach(doc => {
             const sitemapSource = doc.data().sitemapSource || 'sitemap.xml';
             counts[sitemapSource] = (counts[sitemapSource] || 0) + 1;
           });
           
+          // Find sitemap with most pages and auto-select it
+          let maxPages = 0;
+          let selectedSitemap = sitemapList[0] || 'sitemap.xml';
+          
+          for (const [sitemap, count] of Object.entries(counts)) {
+            if (count > maxPages) {
+              maxPages = count;
+              selectedSitemap = sitemap;
+            }
+          }
+          
+          console.log('📊 Sitemap counts calculated:', counts);
+          console.log('🎯 Auto-selecting sitemap with most pages:', selectedSitemap, '(', maxPages, 'pages)');
+          
           setSitemapCounts(counts);
+          
+          // Auto-select the sitemap with most pages
+          if (onSelectSitemap) {
+            onSelectSitemap(selectedSitemap);
+          }
         }
       } catch (error) {
         console.error('Error fetching sitemaps:', error);
@@ -75,9 +100,48 @@ export function FloatingControls({
     { value: 'grid', label: 'Grid', icon: Grid3x3 },
     { value: 'tree', label: 'Tree', icon: GitBranch },
     { value: 'dagre', label: 'Dagre', icon: Network },
+    { value: 'elk', label: 'ELK', icon: Network },
+    { value: 'force', label: 'Force', icon: Network },
+    { value: 'radial', label: 'Radial', icon: Network },
   ];
 
   const currentLayout = layoutOptions.find(l => l.value === selectedLayout) || layoutOptions[0];
+
+  const handleUpdateEdges = async () => {
+    console.log('🔄 Starting edge migration for project:', projectId);
+    setIsUpdatingEdges(true);
+    try {
+      const response = await fetch('/api/projects/update-edges', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId }),
+      });
+
+      const result = await response.json();
+      console.log('📊 Migration response:', result);
+      
+      if (response.ok) {
+        console.log('✅ Edges updated successfully:', result);
+        if (result.totalUpdated > 0) {
+          alert(`Successfully updated ${result.totalUpdated} edges to bezier curves!`);
+          // Refresh the page to see the changes
+          window.location.reload();
+        } else {
+          alert('No edges needed updating - they may already be using bezier curves.');
+        }
+      } else {
+        console.error('❌ Failed to update edges:', result);
+        alert(`Failed to update edges: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error updating edges:', error);
+      alert('Error updating edges. Please try again.');
+    } finally {
+      setIsUpdatingEdges(false);
+    }
+  };
 
   return (
     <motion.div 
@@ -124,9 +188,9 @@ export function FloatingControls({
                       return (
                         <motion.button
                           key={layout.value}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.06, duration: 0.16 }}
                           onClick={() => {
                             onSelectLayout(layout.value);
                             setIsLayoutOpen(false);
@@ -189,9 +253,9 @@ export function FloatingControls({
                           return (
                             <motion.button
                               key={sitemap}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
+                              initial={{ opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.06, duration: 0.16 }}
                               onClick={() => {
                                 onSelectSitemap(sitemap);
                                 setIsSitemapOpen(false);
@@ -271,6 +335,27 @@ export function FloatingControls({
 
         {/* Divider */}
         <div className="h-5 w-px bg-[#5B98D6]/20" />
+
+        {/* Update Edges to Bezier */}
+        <motion.button
+          onClick={handleUpdateEdges}
+          disabled={isUpdatingEdges}
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0] disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Update edges to bezier curves"
+        >
+          <RefreshCw className={`h-4 w-4 ${isUpdatingEdges ? 'animate-spin opacity-50' : ''}`} />
+        </motion.button>
+
+        {/* Reset Layout */}
+        {onResetLayout && (
+          <motion.button
+            onClick={onResetLayout}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+            title="Reset layout (re-apply algorithm)"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </motion.button>
+        )}
 
         {/* Fit View */}
         <motion.button

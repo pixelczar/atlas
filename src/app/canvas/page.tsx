@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useCallback, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -23,27 +23,46 @@ const SiteMapFlow = dynamic(() => import('@/components/flow/SiteMapFlow'), {
 
 function CanvasContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const rawProjectId = searchParams.get('project') || 'demo-project';
   const projectId = rawProjectId.trim();
   
-  // Debug the projectId to check for newline characters
-  console.log('🔍 ProjectId debug:', {
-    raw: rawProjectId,
-    length: rawProjectId.length,
-    hasNewline: rawProjectId.includes('\n'),
-    hasCarriageReturn: rawProjectId.includes('\r'),
-    charCodes: rawProjectId.split('').map(c => c.charCodeAt(0)),
-    trimmed: projectId,
-    trimmedLength: projectId.length
-  });
+  // Clean projectId (remove any whitespace/newlines)
   
   const [selectedSitemap, setSelectedSitemap] = useState('All Sitemaps');
-  const [selectedLayout, setSelectedLayout] = useState<LayoutType>('dagre');
+  
+  // Load saved sitemap selection from localStorage
+  useEffect(() => {
+    const savedSitemap = localStorage.getItem(`atlas-sitemap-${projectId}`);
+    if (savedSitemap) {
+      setSelectedSitemap(savedSitemap);
+      console.log(`🎯 Canvas: Restored sitemap selection: ${savedSitemap}`);
+    }
+  }, [projectId]);
+  
+  // Save sitemap selection to localStorage when it changes
+  useEffect(() => {
+    if (selectedSitemap !== 'All Sitemaps') {
+      localStorage.setItem(`atlas-sitemap-${projectId}`, selectedSitemap);
+      console.log(`🎯 Canvas: Saved sitemap selection: ${selectedSitemap}`);
+    }
+  }, [selectedSitemap, projectId]);
+  
+  // Debug sitemap changes
+  useEffect(() => {
+    console.log(`🎯 Canvas: selectedSitemap changed to: ${selectedSitemap}`);
+  }, [selectedSitemap]);
+  const [selectedLayout, setSelectedLayout] = useState<LayoutType>('elk');
   const [showBrowser, setShowBrowser] = useState(false);
   const [showProjectSidebar, setShowProjectSidebar] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [iframePreviewUrl, setIframePreviewUrl] = useState<string | null>(null);
   const [focusNodeFn, setFocusNodeFn] = useState<((nodeId: string) => void) | null>(null);
+  const [selectedNode, setSelectedNode] = useState<{
+    id: string;
+    url: string;
+    title: string;
+  } | null>(null);
 
   const handleFlowReady = useCallback((_: () => void, __: () => void) => {
     console.log('🎯 Flow ready');
@@ -87,15 +106,23 @@ function CanvasContent() {
     }
   }, [focusNodeFn, handlePreviewOpen]);
 
+  const handleNodeSelection = useCallback((node: {
+    id: string;
+    url: string;
+    title: string;
+  } | null) => {
+    setSelectedNode(node);
+  }, []);
+
   return (
-    <div className="flex h-screen flex-col bg-[#DDEEF9]">
+    <div className="flex h-screen flex-col bg-[#F8FAFC]">
       {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-[#5B98D6]/20 bg-[#DDEEF9] px-3 py-1.5">
+      <div className="flex items-center justify-between border-b border-[#5B98D6]/20 bg-[#F8FAFC] px-3 py-1.5">
         <div className="flex items-center gap-4">
-          {/* Atlas Logo - triggers sidebar */}
+          {/* Atlas Logo - goes to dashboard */}
           <button
-            onClick={() => setShowProjectSidebar(true)}
-            className="transition-opacity hover:opacity-70"
+            onClick={() => router.push('/dashboard')}
+            className="transition-opacity hover:opacity-70 pr-4 border-r border-[#5B98D6]/20"
           >
             <AtlasLogo size="md" />
           </button>
@@ -104,14 +131,16 @@ function CanvasContent() {
           <Breadcrumb
             projectId={projectId}
             selectedSitemap={selectedSitemap}
+            selectedNode={selectedNode}
             onSitemapClick={() => setShowBrowser(true)}
             onSelectSitemap={setSelectedSitemap}
             onSearchChange={handleSearchChange}
             onPageClick={handleNodeClick}
             onPagePreview={handlePagePreview}
+            onProjectClick={() => setShowProjectSidebar(true)}
           />
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -127,7 +156,7 @@ function CanvasContent() {
             <Download className="h-3 w-3" />
             Export
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* Canvas + Preview Panel Container */}
@@ -145,6 +174,7 @@ function CanvasContent() {
             onFlowReady={handleFlowReady}
             onPreviewOpen={handlePreviewOpen}
             onFocusNode={handleFocusNode}
+            onNodeSelection={handleNodeSelection}
           />
         </div>
 

@@ -10,21 +10,29 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 interface BreadcrumbProps {
   projectId: string;
   selectedSitemap: string;
+  selectedNode?: {
+    id: string;
+    url: string;
+    title: string;
+  } | null;
   onSitemapClick?: () => void;
   onSelectSitemap?: (sitemap: string) => void;
   onSearchChange?: (searchTerm: string) => void;
   onPageClick?: (pageId: string) => void;
   onPagePreview?: (pageId: string, url: string) => void;
+  onProjectClick?: () => void;
 }
 
 interface PageItem {
   id: string;
   url: string;
   title: string;
+  description?: string;
   isHidden: boolean;
+  lastModified?: Date;
 }
 
-export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelectSitemap, onSearchChange, onPageClick, onPagePreview }: BreadcrumbProps) {
+export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemapClick, onSelectSitemap, onSearchChange, onPageClick, onPagePreview, onProjectClick }: BreadcrumbProps) {
   const [projectName, setProjectName] = useState<string>('');
   const [domain, setDomain] = useState<string>('');
   const [showPages, setShowPages] = useState(false);
@@ -35,23 +43,36 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
   const [isLoadingPages, setIsLoadingPages] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(-1);
+  // Removed sort and filter controls - always show all pages
   const searchInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Calculate filtered pages
+  // Calculate filtered pages - only text search, no status filtering or sorting
   const filteredPages = useMemo(() => {
-    const filtered = pages.filter(page => {
-      if (!searchQuery) return true;
-      const query = searchQuery.toLowerCase();
-      return (
-        page.title.toLowerCase().includes(query) ||
-        page.url.toLowerCase().includes(query)
-      );
+    let filtered = pages.filter(page => {
+      // Text search only
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesText = (
+          page.title.toLowerCase().includes(query) ||
+          page.url.toLowerCase().includes(query) ||
+          (page.description && page.description.toLowerCase().includes(query))
+        );
+        if (!matchesText) return false;
+      }
+      
+      return true;
     });
-    console.log('📊 Breadcrumb: Filtered pages count:', filtered.length, 'of', pages.length, 'total');
+    
+    // No sorting - show in original order
     return filtered;
   }, [pages, searchQuery]);
+
+  // Always show all pages - no limit
+  const displayedPages = useMemo(() => {
+    return filteredPages;
+  }, [filteredPages]);
 
   // Auto-focus search input when Pages dropdown opens
   useEffect(() => {
@@ -92,30 +113,41 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
     if (!showPages) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const filteredPagesCount = filteredPages.length;
+      const displayedPagesCount = displayedPages.length;
       
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedIndex(prev => 
-          prev < filteredPagesCount - 1 ? prev + 1 : prev
+          prev < displayedPagesCount - 1 ? prev + 1 : prev
         );
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelectedIndex(prev => prev > 0 ? prev - 1 : -1);
-      } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      } else if (e.key === 'Enter') {
         e.preventDefault();
-        const selectedPage = filteredPages[selectedIndex];
-        if (selectedPage && onPageClick) {
-          onPageClick(selectedPage.id);
-          setShowPages(false);
-          setSearchQuery('');
+        if (selectedIndex >= 0) {
+          // Open preview for selected page
+          const selectedPage = displayedPages[selectedIndex];
+          if (selectedPage && onPagePreview) {
+            onPagePreview(selectedPage.id, selectedPage.url);
+            setShowPages(false);
+            setSearchQuery('');
+          }
+        } else if (displayedPages.length > 0) {
+          // Open preview for first result if no selection
+          const firstPage = displayedPages[0];
+          if (firstPage && onPagePreview) {
+            onPagePreview(firstPage.id, firstPage.url);
+            setShowPages(false);
+            setSearchQuery('');
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showPages, selectedIndex, filteredPages, onPageClick]);
+  }, [showPages, selectedIndex, displayedPages, onPageClick, onPagePreview]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -147,6 +179,13 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
           const nodesRef = collection(db, `projects/${projectId}/nodes`);
           const nodesSnapshot = await getDocs(query(nodesRef));
           
+          console.log('🔍 Breadcrumb sitemap counts - Total nodes fetched:', nodesSnapshot.size);
+          console.log('📄 Breadcrumb nodes sample:', nodesSnapshot.docs.slice(0, 3).map(doc => ({
+            id: doc.id,
+            url: doc.data().url,
+            sitemapSource: doc.data().sitemapSource
+          })));
+          
           const counts: Record<string, number> = { 'All Sitemaps': nodesSnapshot.size };
           
           nodesSnapshot.docs.forEach(doc => {
@@ -154,6 +193,7 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
             counts[sitemapSource] = (counts[sitemapSource] || 0) + 1;
           });
           
+          console.log('📊 Breadcrumb sitemap counts calculated:', counts);
           setSitemapCounts(counts);
         }
       } catch (error) {
@@ -172,23 +212,31 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
       const nodesRef = collection(db, `projects/${projectId}/nodes`);
       const q = query(nodesRef);
       const snapshot = await getDocs(q);
-      console.log('📊 Breadcrumb: Firestore returned', snapshot.docs.length, 'documents');
+      console.log('🔍 Breadcrumb pages fetch - Total nodes fetched:', snapshot.size);
+      // Firestore returned documents
 
       // Load hidden state from localStorage
       const storageKey = `atlas-hidden-pages-${projectId}`;
       const storedHidden = localStorage.getItem(storageKey);
       const hiddenPageIds = storedHidden ? new Set(JSON.parse(storedHidden)) : new Set();
 
-      const pageList: PageItem[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        url: doc.data().url || '',
-        title: doc.data().title || 'Untitled',
-        isHidden: hiddenPageIds.has(doc.id) || doc.data().isHidden || false,
-      }));
+      const pageList: PageItem[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          url: data.url || '',
+          title: data.title || 'Untitled',
+          description: data.description || null,
+          isHidden: hiddenPageIds.has(doc.id) || data.isHidden || false,
+          // Removed status field
+          lastModified: data.metadata?.lastModified?.toDate() || data.updatedAt?.toDate() || null,
+        };
+      });
 
       // Sort by URL
       pageList.sort((a, b) => a.url.localeCompare(b.url));
-      console.log('📊 Breadcrumb: Loaded', pageList.length, 'pages from Firestore');
+      // Loaded pages from Firestore
+      console.log('📄 Pages loaded from Firestore:', pageList.length, 'total pages');
       setPages(pageList);
     } catch (error) {
       console.error('Error fetching pages:', error);
@@ -264,9 +312,37 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
           className="flex items-center gap-1.5"
         >
           {/* Domain */}
-          <div className="rounded-lg px-2 py-1 transition-colors">
-            <span className="font-medium text-gray-700">{domain || projectName}</span>
-          </div>
+          <button
+            onClick={onProjectClick}
+            className="rounded-lg px-2 py-1 transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0] font-medium text-[#4863B0] flex items-center gap-1.5"
+          >
+            {domain ? (
+              <img 
+                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                alt={`${domain} favicon`}
+                className="h-4 w-4 rounded-sm"
+                onError={(e) => {
+                  // Fallback to window icon if favicon fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const fallback = target.nextElementSibling as HTMLElement;
+                  if (fallback) fallback.style.display = 'block';
+                }}
+              />
+            ) : null}
+            <svg 
+              className="h-4 w-4" 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+              style={{ display: domain ? 'none' : 'block' }}
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2"/>
+              <path d="M9 9h6v6H9z" strokeWidth="2"/>
+              <path d="M3 9h6v6H3z" strokeWidth="2"/>
+            </svg>
+            {domain || projectName}
+          </button>
 
           <ChevronRight className="h-3 w-3 text-[#1a1a1a]/30" />
 
@@ -274,36 +350,71 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
           <div className="relative">
             <motion.button
               onClick={() => setShowSitemaps(!showSitemaps)}
-              className={`rounded-lg px-2 py-1 font-medium transition-colors hover:bg-white/80 ${
-                showSitemaps ? 'bg-white/80 text-[#4863B0]' : 'text-[#4863B0]'
+              className={`rounded-lg px-2 py-1 font-medium transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0] ${
+                showSitemaps ? 'bg-[#4863B0]/10 text-[#4863B0]' : 'text-[#4863B0]'
               }`}
             >
-              {selectedSitemap}
+              <span className="flex items-center gap-1.5">
+                <span>{selectedSitemap}</span>
+                {sitemapCounts[selectedSitemap] && (
+                  <span className="inline-flex items-center justify-center rounded-lg bg-[#4863B0]/10 px-1 py-0.5 text-[10px] font-medium text-[#4863B0] min-w-5">
+                    {sitemapCounts[selectedSitemap]}
+                  </span>
+                )}
+              </span>
             </motion.button>
           </div>
 
           <ChevronRight className="h-3 w-3 text-[#1a1a1a]/30" />
 
-          {/* Pages */}
-          <Tooltip delayDuration={300}>
-            <TooltipTrigger asChild>
-              <motion.button
-                onClick={handlePagesClick}
-                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium transition-colors hover:bg-white/80 ${
-                  showPages ? 'bg-white/80 text-[#4863B0]' : 'text-[#4863B0]'
-                }`}
-              >
-                <FileText className="h-3 w-3" />
-                <span>Pages</span>
-                {hiddenCount > 0 && (
-                  <span className="text-[10px] text-[#1a1a1a]/40">({hiddenCount} hidden)</span>
-                )}
-              </motion.button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Search pages <span className="ml-1 text-xs opacity-70">{shortcutKey}</span></p>
-            </TooltipContent>
-          </Tooltip>
+          {/* Selected Node Path or Pages */}
+          {selectedNode ? (
+            <motion.div
+              key={selectedNode.id}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="flex items-center gap-1.5"
+            >
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    onClick={handlePagesClick}
+                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-[#4863B0] transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0]"
+                  >
+                    <Globe className="h-3 w-3" />
+                    <span className="truncate max-w-[200px]" title={selectedNode.title}>
+                      {selectedNode.title}
+                    </span>
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p>{selectedNode.url}</p>
+                </TooltipContent>
+              </Tooltip>
+            </motion.div>
+          ) : (
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <motion.button
+                  onClick={handlePagesClick}
+                  className={`flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0] ${
+                    showPages ? 'bg-[#4863B0]/10 text-[#4863B0]' : 'text-[#4863B0]'
+                  }`}
+                >
+                  <FileText className="h-3 w-3" />
+                  <span>Pages</span>
+                  {hiddenCount > 0 && (
+                    <span className="text-[10px] text-[#1a1a1a]/40">({hiddenCount} hidden)</span>
+                  )}
+                </motion.button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Search pages <span className="ml-1 text-xs opacity-70">{shortcutKey}</span></p>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </motion.div>
 
       {/* Pages Panel */}
@@ -331,9 +442,11 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
               {/* Header with Search */}
               <div className="border-b border-[#5B98D6]/10 px-3 py-2.5">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-[#4863B0]">
-                    Pages ({filteredPages.length})
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-[#4863B0]">
+                      Pages ({displayedPages.length})
+                    </span>
+                  </div>
                   {hiddenCount > 0 && (
                     <span className="text-[10px] text-[#1a1a1a]/50">
                       {hiddenCount} hidden
@@ -364,44 +477,57 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
                     className="w-full rounded-lg border border-[#5B98D6]/20 bg-[#DDEEF9]/30 py-1.5 pl-8 pr-3 text-xs text-[#1a1a1a] placeholder:text-[#1a1a1a]/40 focus:border-[#4863B0] focus:outline-none focus:ring-1 focus:ring-[#4863B0]/20"
                   />
                 </div>
+                
+                {/* Removed filter and sort controls */}
               </div>
 
               {/* Pages List */}
               <div className="max-h-96 overflow-y-auto">
                 {isLoadingPages ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-8">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4863B0] border-t-transparent" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4863B0]/50 border-t-transparent" />
                     <p className="text-[10px] text-[#1a1a1a]/40">Loading pages...</p>
                   </div>
-                ) : filteredPages.length === 0 ? (
+                ) : displayedPages.length === 0 ? (
                   <div className="py-8 text-center text-xs text-[#1a1a1a]/40">
                     No pages found
                   </div>
                 ) : (
                   <div className="divide-y divide-[#5B98D6]/10" ref={listRef}>
-                    {filteredPages.map((page, index) => (
+                    {displayedPages.map((page, index) => (
                       <motion.div
                         key={page.id}
-                        initial={{ opacity: 0, y: 8 }}
+                        initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.04, duration: 0.16 }}
+                        transition={{ delay: index * 0.06, duration: 0.16 }}
                         className={`group flex items-center justify-between gap-2 px-3 py-2 transition-colors cursor-pointer ${
                           selectedIndex === index 
-                            ? 'bg-yellow-200 border-l-4 border-yellow-500' 
+                            ? 'bg-yellow-200' 
                             : 'hover:bg-slate-50'
-                        } ${page.isHidden ? 'opacity-40' : ''}`}
+                        } ${page.isHidden ? 'opacity-40' : ''} ${
+                          index === 0 ? 'rounded-t-lg' : ''
+                        } ${
+                          index === displayedPages.length - 1 ? 'rounded-b-lg' : ''
+                        }`}
                         onClick={() => {
-                          if (onPageClick) {
-                            onPageClick(page.id);
+                          if (onPagePreview) {
+                            onPagePreview(page.id, page.url);
                             setShowPages(false);
                             setSearchQuery('');
                           }
                         }}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-[#1a1a1a]">
-                            {page.title}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-xs font-medium text-[#1a1a1a]">
+                              {page.title}
+                            </p>
+                          </div>
+                          {page.description && (
+                            <p className="truncate text-[10px] text-[#1a1a1a]/60">
+                              {page.description}
+                            </p>
+                          )}
                           <p className="truncate text-[11px] text-[#1a1a1a]/50" title={page.url}>
                             {page.url}
                           </p>
@@ -484,10 +610,11 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
                   return (
                     <motion.button
                       key={sitemap}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.03, duration: 0.15 }}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.06, duration: 0.16 }}
                       onClick={() => {
+                        console.log(`🔍 Breadcrumb: Selecting sitemap: ${sitemap}`);
                         if (onSelectSitemap) {
                           onSelectSitemap(sitemap);
                         }
@@ -495,7 +622,7 @@ export function Breadcrumb({ projectId, selectedSitemap, onSitemapClick, onSelec
                       }}
                       className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs transition-colors ${
                         selectedSitemap === sitemap
-                          ? 'bg-yellow-200 text-[#4863B0] font-medium border-l-4 border-yellow-500'
+                          ? 'bg-yellow-200 text-[#4863B0] font-medium'
                           : count === 0
                             ? 'text-[#1a1a1a]/30 cursor-not-allowed'
                             : 'text-[#1a1a1a] hover:bg-[#5B98D6]/5'

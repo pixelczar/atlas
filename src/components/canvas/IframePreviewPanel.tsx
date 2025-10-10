@@ -12,9 +12,9 @@ interface IframePreviewPanelProps {
 const ZOOM_LEVELS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0];
 
 export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
-  const [width, setWidth] = useState(800);
+  const [width, setWidth] = useState(1000); // Wider default width
   const [isResizing, setIsResizing] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(0.5); // Default 50% zoom
+  const [zoomLevel, setZoomLevel] = useState(0.67); // Default 67% zoom
   const panelRef = useRef<HTMLDivElement>(null);
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef(0);

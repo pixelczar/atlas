@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
           edgeBatch.set(edgeRef, {
             source: sourceId,
             target: targetId,
-            type: 'smoothstep',
+            type: 'default',
             animated: false,
             label: null,
             createdAt: serverTimestamp(),
@@ -155,6 +155,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ Created project ${projectId} with ${nodeRefs.length} nodes`);
+
+    // Wait a moment for Firestore to be fully consistent before triggering screenshots
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     return NextResponse.json({
       success: true,

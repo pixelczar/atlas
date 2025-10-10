@@ -13,30 +13,15 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
     // Clean the projectId to remove any whitespace or newline characters
     const cleanProjectId = projectId.trim();
     
-    // Debug the projectId being passed to the hook
-    console.log('🔍 useRealtimeNodes projectId debug:', {
-      raw: projectId,
-      length: projectId.length,
-      hasNewline: projectId.includes('\n'),
-      hasCarriageReturn: projectId.includes('\r'),
-      charCodes: projectId.split('').map(c => c.charCodeAt(0)),
-      trimmed: cleanProjectId,
-      trimmedLength: cleanProjectId.length
-    });
-    
-    if (!cleanProjectId || cleanProjectId === 'demo-project') {
-      console.log('🚫 Skipping Firestore listener - no valid project ID');
+    if (!cleanProjectId || cleanProjectId === 'demo-project' || cleanProjectId.length < 3) {
       setLoading(false);
       return;
     }
     
     if (!db) {
-      console.warn('Firestore not initialized - running in demo mode');
       setLoading(false);
       return;
     }
-
-    console.log('🔥 Setting up Firestore listener for project:', cleanProjectId);
     try {
       const nodesRef = collection(db, `projects/${cleanProjectId}/nodes`);
       const q = query(nodesRef);
@@ -46,8 +31,8 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
         (snapshot) => {
           const now = Date.now();
           
-          // Only update if enough time has passed since last update (1000ms minimum)
-          if (now - lastUpdateRef.current < 1000) {
+          // Only update if enough time has passed since last update (100ms minimum)
+          if (now - lastUpdateRef.current < 100) {
             console.log('⏸️ Skipping update - too soon since last update');
             return;
           }
@@ -81,8 +66,18 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
             };
           });
 
-          // Only update if nodes actually changed to prevent unnecessary re-renders
-          const nodesChanged = JSON.stringify(firestoreNodes) !== JSON.stringify(lastNodesRef.current);
+          // PERFORMANCE: Only update if nodes actually changed to prevent unnecessary re-renders
+          // Use a more efficient comparison for large datasets
+          const nodesChanged = firestoreNodes.length !== lastNodesRef.current.length || 
+            firestoreNodes.some((node, index) => {
+              const lastNode = lastNodesRef.current[index];
+              return !lastNode || 
+                node.id !== lastNode.id || 
+                node.position.x !== lastNode.position.x || 
+                node.position.y !== lastNode.position.y ||
+                node.data?.isHidden !== lastNode.data?.isHidden;
+            });
+            
           if (nodesChanged) {
             console.log('🎯 Setting nodes:', firestoreNodes.length, 'nodes');
             setNodes(firestoreNodes as Node[]);
@@ -94,7 +89,12 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
           setLoading(false);
         },
         (error) => {
-          console.error('Firestore listener error:', error);
+          console.error('❌ Firestore listener error:', error);
+          console.error('Error details:', {
+            code: error.code,
+            message: error.message,
+            projectId: cleanProjectId
+          });
           setLoading(false);
         }
       );

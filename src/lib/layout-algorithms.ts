@@ -4,8 +4,9 @@
  */
 
 import * as dagre from 'dagre';
+import { calculateImprovedDagreLayout, calculateEnhancedDagreLayout, calculateElkLayout } from './improved-layout-algorithms';
 
-export type LayoutType = 'grid' | 'depth-columns' | 'radial' | 'force' | 'tree' | 'dagre';
+export type LayoutType = 'grid' | 'depth-columns' | 'radial' | 'force' | 'tree' | 'dagre' | 'elk';
 
 export interface LayoutOptions {
   width?: number;
@@ -218,17 +219,11 @@ export function calculateTreeLayout(
     ranksep: spacing + 60, // Vertical spacing between levels
     marginx: 30,
     marginy: 30,
-    // Use network simplex for better sibling clustering
+    // Use network-simplex for better deep hierarchy support
     ranker: 'network-simplex',
     align: 'UL', // Align to upper left
-    // Force tighter clustering of siblings
-    acyclicer: 'greedy',
+    // Remove acyclicer to allow proper hierarchy
     edgesep: 10, // Minimum edge separation
-    // Ensure root node is at the top
-    ...(rootNode && { 
-      ranker: 'network-simplex',
-      align: 'UL' // Align to upper left
-    })
   });
   
   // Default to use node label for sizing
@@ -276,6 +271,7 @@ export function calculateTreeLayout(
             let parentNode = null;
             
             // Try to find parent by progressively removing path segments
+            // Start from the most specific parent and work up
             for (let i = segments.length - 1; i >= 0; i--) {
               const parentPathSegments = segments.slice(0, i);
               const parentPath = parentPathSegments.length === 0 ? '/' : '/' + parentPathSegments.join('/');
@@ -283,20 +279,57 @@ export function calculateTreeLayout(
               
               parentNode = urlToNode.get(parentUrl);
               if (parentNode && parentNode.id !== node.id) {
-                console.log(`🔗 Tree: Found parent for ${nodeUrl}: ${parentUrl}`);
+                console.log(`🔗 Tree: Found parent for ${nodeUrl}: ${parentUrl} (depth: ${i})`);
                 break;
+              }
+            }
+            
+            // If no intermediate parent found, try to find the closest existing parent
+            // by looking for any node that is a prefix of the current path
+            if (!parentNode) {
+              console.log(`🔍 Tree: No exact parent found, looking for closest existing parent...`);
+              
+              // Find all existing nodes and check if any is a prefix of current path
+              let bestParent = null;
+              let bestMatchLength = 0;
+              
+              for (const [existingUrl, existingNode] of urlToNode.entries()) {
+                if (existingNode.id === node.id) continue;
+                
+                try {
+                  const existingUrlObj = new URL(existingUrl);
+                  const existingPath = existingUrlObj.pathname;
+                  
+                  // Check if this existing path is a prefix of the current path
+                  if (pathname.startsWith(existingPath) && existingPath !== pathname) {
+                    const matchLength = existingPath.split('/').filter(Boolean).length;
+                    if (matchLength > bestMatchLength) {
+                      bestParent = existingNode;
+                      bestMatchLength = matchLength;
+                      console.log(`🎯 Tree: Found better parent: ${existingUrl} (match length: ${matchLength})`);
+                    }
+                  }
+                } catch (e) {
+                  // Skip invalid URLs
+                }
+              }
+              
+              if (bestParent) {
+                parentNode = bestParent;
+                console.log(`✅ Tree: Using closest parent: ${bestParent.data?.url}`);
               }
             }
             
             // If no intermediate parent found, connect to root
             if (!parentNode && rootNode && node.id !== rootNode.id) {
               parentNode = rootNode;
-              console.log(`🔗 Tree: Connecting ${nodeUrl} to root`);
+              console.log(`🔗 Tree: Connecting ${nodeUrl} to root (no intermediate parent found)`);
             }
             
             if (parentNode && parentNode.id !== node.id) {
               g.setEdge(parentNode.id, node.id);
               edgesAdded++;
+              console.log(`✅ Tree: Added edge from ${parentNode.data?.url} to ${nodeUrl}`);
             }
           } else if (node.id !== rootNode?.id) {
             // This is a root-level page, connect to root if it's not the root itself
@@ -340,6 +373,9 @@ export function calculateTreeLayout(
       const y = dagreNode.y - nodeHeight / 2;
       
       positions.set(node.id, { x, y });
+      
+      // Debug: Log node positions
+      console.log(`📍 Layout Node ${node.id}: (${x}, ${y}) - URL: ${node.data?.url}`);
       
       // Track bounds for centering
       minX = Math.min(minX, x);
@@ -470,11 +506,10 @@ export function calculateDagreLayout(
     ranksep: spacing + 100, // Vertical spacing between levels
     marginx: 30,
     marginy: 30,
-    // Use network simplex for better sibling clustering
+    // Use network-simplex for better deep hierarchy support
     ranker: 'network-simplex',
     align: 'UL', // Align to upper left
-    // Force tighter clustering of siblings
-    acyclicer: 'greedy',
+    // Remove acyclicer to allow proper hierarchy
     edgesep: 10, // Minimum edge separation
   });
   
@@ -521,6 +556,7 @@ export function calculateDagreLayout(
             let parentNode = null;
             
             // Try to find parent by progressively removing path segments
+            // Start from the most specific parent and work up
             for (let i = segments.length - 1; i >= 0; i--) {
               const parentPathSegments = segments.slice(0, i);
               const parentPath = parentPathSegments.length === 0 ? '/' : '/' + parentPathSegments.join('/');
@@ -528,20 +564,57 @@ export function calculateDagreLayout(
               
               parentNode = urlToNode.get(parentUrl);
               if (parentNode && parentNode.id !== node.id) {
-                console.log(`🔗 Dagre: Found parent for ${nodeUrl}: ${parentUrl}`);
+                console.log(`🔗 Dagre: Found parent for ${nodeUrl}: ${parentUrl} (depth: ${i})`);
                 break;
+              }
+            }
+            
+            // If no intermediate parent found, try to find the closest existing parent
+            // by looking for any node that is a prefix of the current path
+            if (!parentNode) {
+              console.log(`🔍 Dagre: No exact parent found, looking for closest existing parent...`);
+              
+              // Find all existing nodes and check if any is a prefix of current path
+              let bestParent = null;
+              let bestMatchLength = 0;
+              
+              for (const [existingUrl, existingNode] of urlToNode.entries()) {
+                if (existingNode.id === node.id) continue;
+                
+                try {
+                  const existingUrlObj = new URL(existingUrl);
+                  const existingPath = existingUrlObj.pathname;
+                  
+                  // Check if this existing path is a prefix of the current path
+                  if (pathname.startsWith(existingPath) && existingPath !== pathname) {
+                    const matchLength = existingPath.split('/').filter(Boolean).length;
+                    if (matchLength > bestMatchLength) {
+                      bestParent = existingNode;
+                      bestMatchLength = matchLength;
+                      console.log(`🎯 Dagre: Found better parent: ${existingUrl} (match length: ${matchLength})`);
+                    }
+                  }
+                } catch (e) {
+                  // Skip invalid URLs
+                }
+              }
+              
+              if (bestParent) {
+                parentNode = bestParent;
+                console.log(`✅ Dagre: Using closest parent: ${bestParent.data?.url}`);
               }
             }
             
             // If no intermediate parent found, connect to root
             if (!parentNode && rootNode && node.id !== rootNode.id) {
               parentNode = rootNode;
-              console.log(`🔗 Dagre: Connecting ${nodeUrl} to root`);
+              console.log(`🔗 Dagre: Connecting ${nodeUrl} to root (no intermediate parent found)`);
             }
             
             if (parentNode && parentNode.id !== node.id) {
               g.setEdge(parentNode.id, node.id);
               edgesAdded++;
+              console.log(`✅ Dagre: Added edge from ${parentNode.data?.url} to ${nodeUrl}`);
             }
           } else if (node.id !== rootNode?.id) {
             // This is a root-level page, connect to root if it's not the root itself
@@ -565,6 +638,16 @@ export function calculateDagreLayout(
   if (rootNode) {
     console.log(`🏠 Root node found: ${rootNode.data?.url}`);
   }
+  
+  // Debug: Check if we have proper hierarchy
+  console.log('🔍 Hierarchy Debug:');
+  nodes.forEach(node => {
+    const parentId = node.data?.parentId;
+    const url = node.data?.url;
+    console.log(`  Node: ${url}`);
+    console.log(`    Parent ID: ${parentId}`);
+    console.log(`    Has parent: ${!!parentId}`);
+  });
   
   // Debug: Log all node URLs to see what we're working with
   console.log('📋 All node URLs:');
@@ -595,6 +678,21 @@ export function calculateDagreLayout(
     }
   });
   
+  // Debug: Check graph structure before layout
+  console.log('🔍 Graph structure before layout:');
+  console.log(`  Nodes: ${g.nodeCount()}`);
+  console.log(`  Edges: ${g.edgeCount()}`);
+  
+  // Check if graph is connected
+  const components = dagre.graphlib.alg.components(g);
+  console.log(`  Connected components: ${components.length}`);
+  
+  // Debug: Log all edges in the graph
+  console.log('🔗 Edges in dagre graph:');
+  g.edges().forEach((edge, index) => {
+    console.log(`  Edge ${index + 1}: ${edge.v} -> ${edge.w}`);
+  });
+  
   // Run dagre layout algorithm
   dagre.layout(g);
   
@@ -608,6 +706,9 @@ export function calculateDagreLayout(
       const y = dagreNode.y - nodeHeight / 2;
       
       positions.set(node.id, { x, y });
+      
+      // Debug: Log node positions
+      console.log(`📍 Layout Node ${node.id}: (${x}, ${y}) - URL: ${node.data?.url}`);
       
       // Track bounds for centering
       minX = Math.min(minX, x);
@@ -726,7 +827,10 @@ export function applyLayout(
       positions = calculateTreeLayout(nodes, options);
       break;
     case 'dagre':
-      positions = calculateDagreLayout(nodes, options);
+      positions = calculateImprovedDagreLayout(nodes, options);
+      break;
+    case 'elk':
+      positions = calculateElkLayout(nodes, options);
       break;
     default:
       positions = calculateGridLayout(nodes, options);

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, getFirestore } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, getFirestore } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
+import puppeteer from 'puppeteer';
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -85,9 +86,66 @@ function generatePlaceholderSVG(url: string): string {
 }
 
 /**
+ * Capture screenshot using Puppeteer (local development)
+ */
+async function captureScreenshotWithPuppeteer(url: string): Promise<Buffer | null> {
+  let browser;
+  
+  try {
+    console.log(`📸 Capturing screenshot with Puppeteer for: ${url}`);
+    
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
+    });
+    
+    const page = await browser.newPage();
+    
+    // Set viewport to match the expected size
+    await page.setViewport({
+      width: 1280,
+      height: 720,
+      deviceScaleFactor: 1
+    });
+    
+    // Navigate to the URL with timeout
+    await page.goto(url, {
+      waitUntil: 'networkidle2',
+      timeout: SCREENSHOT_TIMEOUT
+    });
+    
+    // Take screenshot
+    const screenshot = await page.screenshot({
+      type: 'jpeg',
+      quality: 80,
+      fullPage: false
+    });
+    
+    console.log(`✅ Puppeteer screenshot captured for: ${url}`);
+    return screenshot as Buffer;
+    
+  } catch (error: any) {
+    console.error('❌ Puppeteer screenshot failed:', error.message);
+    return null;
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+/**
  * Try to capture screenshot using external API with timeout
  */
-async function captureScreenshotWithTimeout(url: string): Promise<Buffer | null> {
+async function captureScreenshotWithAPI(url: string): Promise<Buffer | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SCREENSHOT_TIMEOUT);
 
@@ -95,7 +153,7 @@ async function captureScreenshotWithTimeout(url: string): Promise<Buffer | null>
     const SCREENSHOT_API_KEY = process.env.SCREENSHOT_API_KEY;
     
     if (!SCREENSHOT_API_KEY) {
-      console.log('⚠️  No SCREENSHOT_API_KEY, using placeholder');
+      console.log('⚠️  No SCREENSHOT_API_KEY, skipping API');
       return null;
     }
 
@@ -144,12 +202,28 @@ export async function POST(request: NextRequest) {
 
     console.log(`📸 Screenshot request for ${url} (node: ${nodeId})`);
 
-    // Try to get real screenshot with timeout
-    let screenshotBuffer = await captureScreenshotWithTimeout(url);
+    // Try multiple screenshot methods in order of preference
+    let screenshotBuffer: Buffer | null = null;
     let filename = `screenshots/${projectId}/${nodeId}.jpg`;
     let contentType = 'image/jpeg';
 
-    // Fallback to placeholder SVG if screenshot failed
+    // 1. Try Puppeteer first (best for local development)
+    if (!screenshotBuffer) {
+      screenshotBuffer = await captureScreenshotWithPuppeteer(url);
+      if (screenshotBuffer) {
+        console.log('✅ Puppeteer screenshot successful');
+      }
+    }
+
+    // 2. Try external API if Puppeteer failed
+    if (!screenshotBuffer) {
+      screenshotBuffer = await captureScreenshotWithAPI(url);
+      if (screenshotBuffer) {
+        console.log('✅ External API screenshot successful');
+      }
+    }
+
+    // 3. Fallback to placeholder SVG if all methods failed
     if (!screenshotBuffer) {
       console.log('📦 Using placeholder SVG for:', url);
       const svg = generatePlaceholderSVG(url);
@@ -173,14 +247,45 @@ export async function POST(request: NextRequest) {
     await uploadBytes(storageRef, screenshotBuffer, metadata);
     const thumbUrl = await getDownloadURL(storageRef);
 
-    // Update Firestore node
-    const nodeRef = doc(db, `projects/${projectId}/nodes`, nodeId);
-    await updateDoc(nodeRef, {
-      thumbUrl,
-      'metadata.status': 'ready',
-      'metadata.screenshotAt': new Date(),
-      updatedAt: new Date(),
-    });
+    // Update Firestore node (only if it exists)
+    try {
+      const nodeRef = doc(db, `projects/${projectId}/nodes`, nodeId);
+      
+      // First check if the node exists
+      const nodeDoc = await getDoc(nodeRef);
+      if (!nodeDoc.exists()) {
+        console.log(`⚠️  Node ${nodeId} does not exist in project ${projectId} - screenshot generated but not linked`);
+        return NextResponse.json({
+          success: true,
+          thumbUrl,
+          isPlaceholder: contentType === 'image/svg+xml',
+          method: contentType === 'image/svg+xml' ? 'placeholder' : 'puppeteer',
+          warning: 'Node not found in database'
+        });
+      }
+      
+      await updateDoc(nodeRef, {
+        thumbUrl,
+        'metadata.status': 'ready',
+        'metadata.screenshotAt': new Date(),
+        updatedAt: new Date(),
+      });
+      console.log(`✅ Firestore node updated: ${nodeId}`);
+    } catch (firestoreError: any) {
+      if (firestoreError.code === 'not-found') {
+        console.log(`⚠️  Firestore node not found: ${nodeId} - screenshot generated but not linked`);
+        return NextResponse.json({
+          success: true,
+          thumbUrl,
+          isPlaceholder: contentType === 'image/svg+xml',
+          method: contentType === 'image/svg+xml' ? 'placeholder' : 'puppeteer',
+          warning: 'Node not found in database'
+        });
+      } else {
+        console.error('❌ Firestore update failed:', firestoreError);
+        throw firestoreError;
+      }
+    }
 
     console.log(`✅ Screenshot uploaded: ${thumbUrl}`);
 
@@ -188,7 +293,8 @@ export async function POST(request: NextRequest) {
       success: true,
       thumbUrl,
       nodeId,
-      isPlaceholder: !screenshotBuffer,
+      isPlaceholder: contentType === 'image/svg+xml',
+      method: contentType === 'image/svg+xml' ? 'placeholder' : 'screenshot',
     });
   } catch (error: any) {
     console.error('❌ Screenshot generation failed:', error);

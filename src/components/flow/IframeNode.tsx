@@ -5,11 +5,14 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExternalLink, Loader2, Maximize2, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useHighResIcon } from '@/hooks/useHighResIcon';
 
 export interface IframeNodeData {
   label: string;
   url: string;
   thumbnailUrl?: string;
+  title?: string | null;
+  description?: string | null;
   isLoading?: boolean;
   status?: 'pending' | 'ready';
   isHidden?: boolean;
@@ -68,6 +71,8 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
     }
   }, [data.url]);
 
+  const { iconUrl, isLoading: iconLoading, error: iconError } = useHighResIcon(domain, data.url);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -77,7 +82,7 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
       transition={{ 
         opacity: { duration: 0.15, ease: [0.16, 1, 0.3, 1] },
       }}
-      className={`group relative rounded-xl border-2 bg-white shadow-lg transition-all ${
+      className={`group relative rounded-2xl border-2 bg-white shadow-lg transition-all ${
         selected 
           ? 'border-[#4863B0] shadow-[#4863B0]/20 ring-2 ring-[#4863B0]/20' 
           : data.isHighlighted
@@ -97,14 +102,14 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
         className="!h-2 !w-2 !border-2 !border-white !bg-[#4863B0]"
       />
 
-      <div className="flex flex-col overflow-hidden rounded-xl">
+      <div className="flex flex-col overflow-hidden rounded-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#5B98D6]/10 bg-gradient-to-br from-[#5B98D6]/5 to-transparent px-3 py-2">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-medium text-[#1a1a1a]">
-              {pageTitle}
+            <p className="truncate text-lg font-medium text-[#1a1a1a]">
+              {data.title || pageTitle}
             </p>
-            <p className="truncate text-[10px] text-[#1a1a1a]/40" title={data.url}>
+            <p className="truncate text-[12px] text-[#1a1a1a]/40" title={data.url}>
               {data.url}
             </p>
           </div>
@@ -209,26 +214,8 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
         </AnimatePresence>
 
         {/* Content */}
-        <div className="relative h-36 overflow-hidden bg-gradient-to-br from-[#DDEEF9] to-[#DDEEF9]/80">
-          {data.status === 'pending' || data.isLoading ? (
-            <div className="flex h-full items-center justify-center">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex flex-col items-center gap-2"
-              >
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                >
-                  <Loader2 className="h-5 w-5 text-[#4863B0]" />
-                </motion.div>
-                <p className="text-[10px] text-[#1a1a1a]/50">
-                  {data.status === 'pending' ? 'Generating screenshot...' : 'Loading...'}
-                </p>
-              </motion.div>
-            </div>
-          ) : showIframe ? (
+        <div className="relative h-36 overflow-hidden bg-[#5B98D6]/20">
+          {showIframe ? (
             <iframe
               src={data.url}
               className="h-full w-full border-0"
@@ -252,12 +239,46 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
               decoding="async"
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <div className="flex flex-col items-center gap-2 text-[#1a1a1a]/30">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-[#5B98D6]/20 bg-white">
-                  <ExternalLink className="h-5 w-5" />
-                </div>
-                <p className="text-[10px]">No preview</p>
+            <div className="flex h-full items-center justify-center p-4">
+                <div className="flex h-full w-full items-center justify-center">
+                  {/* High-res fallback image with smart loading */}
+                  <div className="flex h-full w-full items-center justify-center rounded-lg border border-[#5B98D6]/20 bg-white/80 backdrop-blur-sm overflow-hidden">
+                    {iconLoading ? (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4863B0]/30 border-t-[#4863B0]" />
+                      </div>
+                    ) : iconUrl ? (
+                      <img
+                        src={iconUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          imageRendering: 'auto',
+                          backfaceVisibility: 'hidden',
+                          transform: 'translateZ(0)',
+                          willChange: 'transform',
+                          WebkitBackfaceVisibility: 'hidden',
+                          WebkitTransform: 'translateZ(0)',
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center rounded-lg bg-gradient-to-br from-[#4863B0] to-[#5B98D6] text-white text-2xl font-bold">
+                        {domain.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                
+                {/* Page Info */}
+                {/* <div className="space-y-1">
+                  <p className="text-xs font-medium text-[#1a1a1a] line-clamp-2">
+                    {data.url}
+                  </p>
+                  <p className="text-[10px] text-[#1a1a1a]/60 line-clamp-2">
+                    {domain}
+                  </p>
+                </div> */}
               </div>
             </div>
           )}

@@ -121,10 +121,17 @@ export function ProjectSidebar({ isOpen, onClose, currentProjectId }: ProjectSid
 
           {/* Sidebar */}
           <motion.div
-            initial={{ x: -320 }}
-            animate={{ x: 0 }}
-            exit={{ x: -320 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0, x: -385 }}
+            animate={{ 
+              opacity: 1, 
+              x: 0,
+              transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
+            }}
+            exit={{ 
+              opacity: 0, 
+              x: -385,
+              transition: { duration: 0.16, ease: [0.4, 0, 1, 1] }
+            }}
             className="fixed left-0 top-0 z-50 h-full w-96 border-r border-[#5B98D6] bg-white shadow-2xl"
           >
             {/* Header */}
@@ -153,15 +160,15 @@ export function ProjectSidebar({ isOpen, onClose, currentProjectId }: ProjectSid
             <div className="overflow-y-auto p-3" style={{ height: 'calc(100% - 118px)' }}>
               {isLoading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4863B0] border-t-transparent" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4863B0]/50 border-t-transparent" />
                 </div>
               ) : (
                 <div className="space-y-2">
                   {projects.map((project, index) => (
                     <motion.div
                       key={project.id}
-                      initial={{ opacity: 0, x: -16 }}
-                      animate={{ opacity: 1, x: 0 }}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
                       transition={{
                         duration: 0.16,
                         delay: index * 0.06,
