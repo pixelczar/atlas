@@ -5,7 +5,7 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ExternalLink, Loader2, Maximize2, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useHighResIcon } from '@/hooks/useHighResIcon';
+import { useDominantColor } from '@/hooks/useDominantColor';
 
 export interface IframeNodeData {
   label: string;
@@ -65,13 +65,25 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
 
   const domain = useMemo(() => {
     try {
-      return new URL(data.url).hostname.replace('www.', '');
+      const hostname = new URL(data.url).hostname;
+      // Remove 'www.' prefix if present
+      const cleanDomain = hostname.replace(/^www\./, '');
+      console.log(`🌐 Extracted domain for ${data.url}: ${cleanDomain}`);
+      return cleanDomain;
     } catch {
+      console.warn(`⚠️ Failed to parse URL: ${data.url}`);
       return data.url;
     }
   }, [data.url]);
 
-  const { iconUrl, isLoading: iconLoading, error: iconError } = useHighResIcon(domain, data.url);
+  // Use the EXACT same favicon URL as breadcrumb (we know this works!)
+  const faviconUrl = useMemo(() => {
+    if (!domain) return null;
+    // Use Google favicon service - same as breadcrumb
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+  }, [domain]);
+  
+  const dominantColor = useDominantColor(faviconUrl);
 
   return (
     <motion.div
@@ -222,38 +234,59 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
               title={data.label}
               sandbox="allow-same-origin allow-scripts"
             />
-          ) : data.thumbnailUrl ? (
-            <motion.img
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-              src={data.thumbnailUrl}
-              alt={data.label}
-              className="h-full w-full object-cover"
-              style={{
-                imageRendering: 'crisp-edges',
-                backfaceVisibility: 'hidden',
-                transform: 'translateZ(0)',
-              }}
-              loading="lazy"
-              decoding="async"
-            />
           ) : (
-            <div className="flex h-full items-center justify-center p-4">
-                <div className="flex h-full w-full items-center justify-center">
-                  {/* High-res fallback image with smart loading */}
-                  <div className="flex h-full w-full items-center justify-center rounded-lg border border-[#5B98D6]/20 bg-white/80 backdrop-blur-sm overflow-hidden">
-                    {iconLoading ? (
-                      <div className="flex h-full w-full items-center justify-center">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[#4863B0]/30 border-t-[#4863B0]" />
-                      </div>
-                    ) : iconUrl ? (
+            <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
+              {faviconUrl ? (
+                <>
+                  {/* Blurred background favicon */}
+                  <div 
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: `url(${faviconUrl})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
+                      filter: 'blur(24px) saturate(1.8) brightness(1.1)',
+                      transform: 'scale(1.3)',
+                      opacity: 0.25,
+                    }}
+                  />
+                  
+                  {/* Color overlay using dominant color */}
+                  {dominantColor && (
+                    <div 
+                      className="absolute inset-0 mix-blend-multiply"
+                      style={{
+                        backgroundColor: dominantColor,
+                        opacity: 0.4,
+                      }}
+                    />
+                  )}
+                  
+                  {/* Subtle gradient overlay for depth */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/5" />
+                  
+                  {/* Foreground favicon */}
+                  <div className="relative z-10 flex items-center justify-center">
+                    <div className="rounded-xl bg-white/90 p-3 shadow-xl backdrop-blur-sm">
                       <img
-                        src={iconUrl}
+                        src={faviconUrl}
                         alt=""
-                        className="h-full w-full object-cover"
+                        className="h-14 w-14 rounded-lg object-contain"
                         loading="lazy"
                         decoding="async"
+                        onError={(e) => {
+                          console.error('Failed to load favicon:', faviconUrl);
+                          // Fallback to letter if image fails
+                          const parent = (e.target as HTMLElement).closest('.relative');
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="flex h-full w-full items-center justify-center rounded-lg text-white text-2xl font-bold" style="background: linear-gradient(135deg, #4863B0, #5B98D6)">
+                                ${domain.charAt(0).toUpperCase()}
+                              </div>
+                            `;
+                          }
+                        }}
                         style={{
                           imageRendering: 'auto',
                           backfaceVisibility: 'hidden',
@@ -263,23 +296,21 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
                           WebkitTransform: 'translateZ(0)',
                         }}
                       />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center rounded-lg bg-gradient-to-br from-[#4863B0] to-[#5B98D6] text-white text-2xl font-bold">
-                        {domain.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    </div>
                   </div>
-                
-                {/* Page Info */}
-                {/* <div className="space-y-1">
-                  <p className="text-xs font-medium text-[#1a1a1a] line-clamp-2">
-                    {data.url}
-                  </p>
-                  <p className="text-[10px] text-[#1a1a1a]/60 line-clamp-2">
-                    {domain}
-                  </p>
-                </div> */}
-              </div>
+                </>
+              ) : (
+                <div 
+                  className="flex h-full w-full items-center justify-center rounded-lg text-white text-2xl font-bold"
+                  style={{
+                    background: dominantColor 
+                      ? `linear-gradient(135deg, ${dominantColor}, ${dominantColor}dd)`
+                      : 'linear-gradient(135deg, #4863B0, #5B98D6)',
+                  }}
+                >
+                  {domain.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
           )}
         </div>

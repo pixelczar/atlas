@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, Globe, FileText, Eye, EyeOff, Search, Maximize2 } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { doc, getDoc, collection, query, getDocs, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
@@ -21,6 +21,8 @@ interface BreadcrumbProps {
   onPageClick?: (pageId: string) => void;
   onPagePreview?: (pageId: string, url: string) => void;
   onProjectClick?: () => void;
+  onOpenPagesRequest?: () => void;
+  openPagesRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 interface PageItem {
@@ -32,7 +34,7 @@ interface PageItem {
   lastModified?: Date;
 }
 
-export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemapClick, onSelectSitemap, onSearchChange, onPageClick, onPagePreview, onProjectClick }: BreadcrumbProps) {
+export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemapClick, onSelectSitemap, onSearchChange, onPageClick, onPagePreview, onProjectClick, openPagesRef }: BreadcrumbProps) {
   const [projectName, setProjectName] = useState<string>('');
   const [domain, setDomain] = useState<string>('');
   const [showPages, setShowPages] = useState(false);
@@ -255,6 +257,25 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
     }
     setShowPages(!showPages);
   };
+  
+  // Expose function to open pages popover externally
+  const openPages = useCallback(() => {
+    if (!showPages && pages.length === 0) {
+      fetchPages();
+    }
+    if (showPages) {
+      setSearchQuery('');
+    }
+    setShowPages(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPages, pages.length]);
+  
+  // Expose openPages function via ref
+  useEffect(() => {
+    if (openPagesRef) {
+      openPagesRef.current = openPages;
+    }
+  }, [openPages, openPagesRef]);
 
   const togglePageVisibility = async (pageId: string) => {
     const page = pages.find(p => p.id === pageId);
@@ -436,16 +457,17 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.15 }}
-              className="absolute left-0 top-full z-50 mt-2 w-[28rem] rounded-xl border border-[#5B98D6]/20 bg-white shadow-xl"
+              className="absolute left-0 top-full z-50 mt-4 w-[28rem] rounded-xl border border-[#5B98D6]/20 bg-white shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header with Search */}
-              <div className="border-b border-[#5B98D6]/10 px-3 py-2.5">
+              <div className="border-b border-[#5B98D6]/10 px-6 py-3">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-[#4863B0]">
-                      Pages ({displayedPages.length})
-                    </span>
+                    <h3 className="text-3xl font-medium font-serif tracking-tight text-[#1a1a1a]">
+                      Pages <span className="text-xs text-[#1a1a1a]/50 font-sans ml-2">{displayedPages.length}</span>
+
+                    </h3>
                   </div>
                   {hiddenCount > 0 && (
                     <span className="text-[10px] text-[#1a1a1a]/50">
@@ -474,7 +496,7 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
                         onSearchChange?.(e.target.value);
                       }, 300); // 300ms delay
                     }}
-                    className="w-full rounded-lg border border-[#5B98D6]/20 bg-[#DDEEF9]/30 py-1.5 pl-8 pr-3 text-xs text-[#1a1a1a] placeholder:text-[#1a1a1a]/40 focus:border-[#4863B0] focus:outline-none focus:ring-1 focus:ring-[#4863B0]/20"
+                    className="w-full rounded-lg border border-[#5B98D6]/20 bg-[#DDEEF9]/30 py-2 pl-8 pr-3 text-sm text-[#1a1a1a] placeholder:text-[#1a1a1a]/40 focus:border-[#4863B0] focus:outline-none focus:ring-1 focus:ring-[#4863B0]/20"
                   />
                 </div>
                 
@@ -482,7 +504,7 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
               </div>
 
               {/* Pages List */}
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-[500px] overflow-y-auto">
                 {isLoadingPages ? (
                   <div className="flex flex-col items-center justify-center gap-2 py-8">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#4863B0]/50 border-t-transparent" />
@@ -500,7 +522,7 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
                         initial={{ opacity: 0, y: 4 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: index * 0.06, duration: 0.16 }}
-                        className={`group flex items-center justify-between gap-2 px-3 py-2 transition-colors cursor-pointer ${
+                        className={`group flex items-center justify-between gap-2 px-6 py-2 transition-colors cursor-pointer ${
                           selectedIndex === index 
                             ? 'bg-yellow-200' 
                             : 'hover:bg-slate-50'
@@ -519,7 +541,7 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-xs font-medium text-[#1a1a1a]">
+                            <p className="truncate text-sm font-medium text-[#1a1a1a]">
                               {page.title}
                             </p>
                           </div>
@@ -536,36 +558,48 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
                         {/* Action Buttons */}
                         <div className="flex items-center gap-1">
                           {/* Preview Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onPagePreview) {
-                                onPagePreview(page.id, page.url);
-                                setShowPages(false);
-                                setSearchQuery('');
-                              }
-                            }}
-                            className="flex-shrink-0 rounded p-1 text-[#1a1a1a]/40 hover:bg-yellow-100 hover:text-[#4863B0] transition-all"
-                            title="Preview page"
-                          >
-                            <Maximize2 className="h-3.5 w-3.5" />
-                          </button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onPagePreview) {
+                                    onPagePreview(page.id, page.url);
+                                    setShowPages(false);
+                                    setSearchQuery('');
+                                  }
+                                }}
+                                className="flex-shrink-0 rounded p-1 text-[#1a1a1a]/40 hover:bg-yellow-100 hover:text-[#4863B0] transition-all"
+                              >
+                                <Maximize2 className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Preview page</p>
+                            </TooltipContent>
+                          </Tooltip>
 
                           {/* Toggle Visibility Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              togglePageVisibility(page.id);
-                            }}
-                            className="flex-shrink-0 rounded p-1 text-[#1a1a1a]/40 transition-colors hover:bg-yellow-100 hover:text-[#4863B0]"
-                            title={page.isHidden ? 'Show page' : 'Hide page'}
-                          >
-                            {page.isHidden ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  togglePageVisibility(page.id);
+                                }}
+                                className="flex-shrink-0 rounded p-1 text-[#1a1a1a]/40 transition-colors hover:bg-yellow-100 hover:text-[#4863B0]"
+                              >
+                                {page.isHidden ? (
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                ) : (
+                                  <Eye className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{page.isHidden ? 'Show page' : 'Hide page'}</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </motion.div>
                     ))}
@@ -597,7 +631,7 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="border-b border-[#5B98D6]/10 px-3 py-2.5">
+              <div className="border-b border-[#5B98D6]/10 p-6">
                 <span className="text-xs font-medium text-[#4863B0]">
                   Sitemaps ({sitemaps.length})
                 </span>

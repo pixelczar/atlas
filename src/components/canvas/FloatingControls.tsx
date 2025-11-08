@@ -1,11 +1,12 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { ZoomIn, ZoomOut, Maximize2, FileText, ChevronDown, Check, List, Grid3x3, Columns, CircleDot, Sparkles, GitBranch, LayoutGrid, Network, RefreshCw } from 'lucide-react';
+import { ZoomIn, ZoomOut, FileText, ChevronDown, Check, Grid3x3, Columns, CircleDot, Sparkles, GitBranch, LayoutGrid, Network } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { doc, getDoc, collection, query, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { LayoutType } from '@/lib/layout-algorithms';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 
 interface FloatingControlsProps {
   projectId: string;
@@ -13,7 +14,6 @@ interface FloatingControlsProps {
   selectedLayout: LayoutType;
   onSelectSitemap: (sitemap: string) => void;
   onSelectLayout: (layout: LayoutType) => void;
-  onFitView: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onBrowseSitemap?: () => void;
@@ -26,7 +26,6 @@ export function FloatingControls({
   selectedLayout,
   onSelectSitemap,
   onSelectLayout,
-  onFitView, 
   onZoomIn, 
   onZoomOut, 
   onBrowseSitemap,
@@ -36,7 +35,6 @@ export function FloatingControls({
   const [sitemapCounts, setSitemapCounts] = useState<Record<string, number>>({});
   const [isSitemapOpen, setIsSitemapOpen] = useState(false);
   const [isLayoutOpen, setIsLayoutOpen] = useState(false);
-  const [isUpdatingEdges, setIsUpdatingEdges] = useState(false);
 
   useEffect(() => {
     const fetchSitemaps = async () => {
@@ -107,65 +105,36 @@ export function FloatingControls({
 
   const currentLayout = layoutOptions.find(l => l.value === selectedLayout) || layoutOptions[0];
 
-  const handleUpdateEdges = async () => {
-    console.log('🔄 Starting edge migration for project:', projectId);
-    setIsUpdatingEdges(true);
-    try {
-      const response = await fetch('/api/projects/update-edges', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ projectId }),
-      });
-
-      const result = await response.json();
-      console.log('📊 Migration response:', result);
-      
-      if (response.ok) {
-        console.log('✅ Edges updated successfully:', result);
-        if (result.totalUpdated > 0) {
-          alert(`Successfully updated ${result.totalUpdated} edges to bezier curves!`);
-          // Refresh the page to see the changes
-          window.location.reload();
-        } else {
-          alert('No edges needed updating - they may already be using bezier curves.');
-        }
-      } else {
-        console.error('❌ Failed to update edges:', result);
-        alert(`Failed to update edges: ${result.error}`);
-      }
-    } catch (error) {
-      console.error('❌ Error updating edges:', error);
-      alert('Error updating edges. Please try again.');
-    } finally {
-      setIsUpdatingEdges(false);
-    }
-  };
-
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.2, duration: 0.3 }}
-      className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex justify-center"
-    >
-      <div 
-        className="pointer-events-auto flex items-center gap-2 rounded-2xl  bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
+    <TooltipProvider delayDuration={200} skipDelayDuration={0}>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2, duration: 0.3 }}
+        className="pointer-events-none absolute inset-x-0 bottom-8 z-30 flex justify-center"
       >
+        <div 
+          className="pointer-events-auto flex items-center gap-2 rounded-2xl  bg-white/95 px-3 py-2 shadow-xl shadow-[#4863B0]/10 backdrop-blur-sm"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
         {/* Layout Switcher */}
         <div className="relative">
-          <motion.button
-            onClick={() => setIsLayoutOpen(!isLayoutOpen)}
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
-            title="Change layout"
-          >
-            <LayoutGrid className="h-3.5 w-3.5 text-[#4863B0]" />
-            <span className="font-medium">{currentLayout.label}</span>
-            <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isLayoutOpen ? 'rotate-180' : ''}`} />
-          </motion.button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <motion.button
+                onClick={() => setIsLayoutOpen(!isLayoutOpen)}
+                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
+              >
+                <LayoutGrid className="h-3.5 w-3.5 text-[#4863B0]" />
+                <span className="font-medium">{currentLayout.label}</span>
+                <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isLayoutOpen ? 'rotate-180' : ''}`} />
+              </motion.button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Change layout</p>
+            </TooltipContent>
+          </Tooltip>
 
           <AnimatePresence>
             {isLayoutOpen && (
@@ -223,14 +192,20 @@ export function FloatingControls({
         {showSitemapSelector && (
           <>
             <div className="relative">
-              <motion.button
-                onClick={() => setIsSitemapOpen(!isSitemapOpen)}
-                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
-                title="Switch sitemap view"
-              >
-                <span className="max-w-[120px] truncate font-medium">{selectedSitemap}</span>
-                <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isSitemapOpen ? 'rotate-180' : ''}`} />
-              </motion.button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <motion.button
+                    onClick={() => setIsSitemapOpen(!isSitemapOpen)}
+                    className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-[#1a1a1a] transition-colors hover:bg-[#5B98D6]/10"
+                  >
+                    <span className="max-w-[120px] truncate font-medium">{selectedSitemap}</span>
+                    <ChevronDown className={`h-3 w-3 text-[#1a1a1a]/60 transition-transform ${isSitemapOpen ? 'rotate-180' : ''}`} />
+                  </motion.button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Switch sitemap view</p>
+                </TooltipContent>
+              </Tooltip>
 
               <AnimatePresence>
                 {isSitemapOpen && (
@@ -299,16 +274,22 @@ export function FloatingControls({
           </>
         )}
 
-        {/* Browse Sitemap (XML List) */}
+        {/* Browse Sitemap (Pages) */}
         {onBrowseSitemap && (
           <>
-            <motion.button
-              onClick={onBrowseSitemap}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-              title="Browse all URLs"
-            >
-              <List className="h-4 w-4" />
-            </motion.button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <motion.button
+                  onClick={onBrowseSitemap}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+                >
+                  <FileText className="h-5 w-5" />
+                </motion.button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Browse all URLs</p>
+              </TooltipContent>
+            </Tooltip>
 
             {/* Divider */}
             <div className="h-5 w-px bg-[#5B98D6]/20" />
@@ -316,56 +297,54 @@ export function FloatingControls({
         )}
 
         {/* Zoom In */}
-        <motion.button
-          onClick={onZoomIn}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-          title="Zoom in"
-        >
-          <ZoomIn className="h-4 w-4" />
-        </motion.button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <motion.button
+              onClick={onZoomIn}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+            >
+              <ZoomIn className="h-5 w-5" />
+            </motion.button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Zoom in</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Zoom Out */}
-        <motion.button
-          onClick={onZoomOut}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-          title="Zoom out"
-        >
-          <ZoomOut className="h-4 w-4" />
-        </motion.button>
-
-        {/* Divider */}
-        <div className="h-5 w-px bg-[#5B98D6]/20" />
-
-        {/* Update Edges to Bezier */}
-        <motion.button
-          onClick={handleUpdateEdges}
-          disabled={isUpdatingEdges}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0] disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Update edges to bezier curves"
-        >
-          <RefreshCw className={`h-4 w-4 ${isUpdatingEdges ? 'animate-spin opacity-50' : ''}`} />
-        </motion.button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <motion.button
+              onClick={onZoomOut}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+            >
+              <ZoomOut className="h-5 w-5" />
+            </motion.button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Zoom out</p>
+          </TooltipContent>
+        </Tooltip>
 
         {/* Reset Layout */}
         {onResetLayout && (
-          <motion.button
-            onClick={onResetLayout}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-            title="Reset layout (re-apply algorithm)"
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </motion.button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <motion.button
+                onClick={onResetLayout}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+              >
+                <LayoutGrid className="h-5 w-5" />
+              </motion.button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Reset layout (re-apply algorithm)</p>
+            </TooltipContent>
+          </Tooltip>
         )}
 
-        {/* Fit View */}
-        <motion.button
-          onClick={onFitView}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-          title="Center and fit all nodes in view"
-        >
-          <Maximize2 className="h-4 w-4" />
-        </motion.button>
-      </div>
-    </motion.div>
+        </div>
+      </motion.div>
+    </TooltipProvider>
   );
 }

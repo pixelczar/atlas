@@ -15,8 +15,10 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
   const [width, setWidth] = useState(1000); // Wider default width
   const [isResizing, setIsResizing] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.67); // Default 67% zoom
+  const [iframeError, setIframeError] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const iframeContainerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
@@ -84,6 +86,30 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
 
   const handleZoomFit = () => {
     setZoomLevel(1.0);
+  };
+
+  // Reset error state when URL changes
+  useEffect(() => {
+    setIframeError(false);
+  }, [url]);
+
+  const handleIframeError = () => {
+    setIframeError(true);
+  };
+
+  // Generate proxy URL to bypass X-Frame-Options
+  const getProxyUrl = (originalUrl: string) => {
+    if (!originalUrl) return '';
+    try {
+      // Only use proxy for http/https URLs
+      const url = new URL(originalUrl);
+      if (['http:', 'https:'].includes(url.protocol)) {
+        return `/api/proxy?url=${encodeURIComponent(originalUrl)}`;
+      }
+      return originalUrl;
+    } catch {
+      return originalUrl;
+    }
   };
 
   if (!url) return null;
@@ -158,6 +184,17 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </button>
+            
+            {/* Manual Fallback - Show error message if iframe doesn't load */}
+            {!iframeError && (
+              <button
+                onClick={() => setIframeError(true)}
+                className="flex h-7 items-center justify-center rounded px-2 text-xs text-[#1a1a1a]/50 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
+                title="If page doesn't load, click to see alternative options"
+              >
+                Page not loading?
+              </button>
+            )}
 
             {/* Close */}
             <button
@@ -170,24 +207,75 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
           </div>
         </div>
 
-        {/* Iframe with Zoom */}
+        {/* Iframe with Zoom or Error Fallback */}
         <div className="flex-1 overflow-hidden bg-[#DDEEF9]" ref={iframeContainerRef}>
-          <div 
-            className="h-full w-full overflow-auto"
-            style={{
-              transform: `scale(${zoomLevel})`,
-              transformOrigin: 'top left',
-              width: `${100 / zoomLevel}%`,
-              height: `${100 / zoomLevel}%`,
-            }}
-          >
-            <iframe
-              src={url}
-              className="h-full w-full border-0"
-              title="Page Preview"
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-            />
-          </div>
+          {iframeError ? (
+            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
+              <div className="mb-4 rounded-full bg-[#5B98D6]/10 p-4">
+                <Globe className="h-8 w-8 text-[#4863B0]" />
+              </div>
+              <h3 className="mb-2 text-lg font-medium text-[#1a1a1a]">
+                Cannot display in preview
+              </h3>
+              <p className="mb-6 max-w-md text-sm text-[#1a1a1a]/60">
+                This page cannot be displayed in a frame due to security restrictions (X-Frame-Options). 
+                Click the button below to open it in a new tab.
+              </p>
+              <button
+                onClick={() => window.open(url, '_blank')}
+                className="flex items-center gap-2 rounded-lg bg-[#4863B0] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#5B98D6]"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Open in New Tab
+              </button>
+            </div>
+          ) : (
+            <div 
+              className="h-full w-full overflow-auto"
+              style={{
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: 'top left',
+                width: `${100 / zoomLevel}%`,
+                height: `${100 / zoomLevel}%`,
+              }}
+            >
+              <iframe
+                ref={iframeRef}
+                src={getProxyUrl(url)}
+                className="h-full w-full border-0"
+                title="Page Preview"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                onError={handleIframeError}
+                onLoad={(e) => {
+                  // Check if iframe loaded successfully after a short delay
+                  // This gives time for X-Frame-Options errors to manifest
+                  setTimeout(() => {
+                    try {
+                      const iframe = e.target as HTMLIFrameElement;
+                      if (iframe.contentWindow) {
+                        // Try to access contentDocument - will fail for cross-origin
+                        // but that's OK, we just want to check if iframe exists
+                        try {
+                          // For same-origin, we can check document
+                          const doc = iframe.contentWindow.document;
+                          if (!doc || doc.body.children.length === 0) {
+                            // Empty document might indicate blocking
+                            // But we can't be sure, so don't auto-show error
+                          }
+                        } catch (crossOriginError) {
+                          // Cross-origin is normal and fine
+                          // Iframe loaded, just can't access content (expected)
+                        }
+                      }
+                    } catch (error) {
+                      // Iframe might be blocked, but we can't reliably detect
+                      // User can click "Page not loading?" if needed
+                    }
+                  }, 1000);
+                }}
+              />
+            </div>
+          )}
         </div>
       </motion.div>
   );

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Public_Sans, Instrument_Serif } from 'next/font/google';
+import { Public_Sans, Oranienbaum } from 'next/font/google';
 import './globals.css';
 
 const publicSans = Public_Sans({ 
@@ -7,10 +7,10 @@ const publicSans = Public_Sans({
   variable: '--font-public-sans',
 });
 
-const instrumentSerif = Instrument_Serif({ 
+const oranienbaum = Oranienbaum({ 
   weight: '400',
   subsets: ['latin'],
-  variable: '--font-instrument-serif',
+  variable: '--font-oranienbaum',
 });
 
 export const metadata: Metadata = {
@@ -33,7 +33,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${publicSans.variable} ${instrumentSerif.variable} bg-white font-sans antialiased`}>
+      <body className={`${publicSans.variable} ${oranienbaum.variable} bg-white font-sans antialiased`}>
         {children}
       </body>
     </html>

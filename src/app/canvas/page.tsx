@@ -1,14 +1,13 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useState, useCallback, useEffect, Suspense } from 'react';
+import { useState, useCallback, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { AtlasLogo } from '@/components/ui/AtlasLogo';
 import { Download, Share2 } from 'lucide-react';
-import { SitemapBrowser } from '@/components/projects/SitemapBrowser';
 import { ProjectSidebar } from '@/components/canvas/ProjectSidebar';
 import { Breadcrumb } from '@/components/canvas/Breadcrumb';
 import { IframePreviewPanel } from '@/components/canvas/IframePreviewPanel';
@@ -53,8 +52,8 @@ function CanvasContent() {
     console.log(`🎯 Canvas: selectedSitemap changed to: ${selectedSitemap}`);
   }, [selectedSitemap]);
   const [selectedLayout, setSelectedLayout] = useState<LayoutType>('elk');
-  const [showBrowser, setShowBrowser] = useState(false);
   const [showProjectSidebar, setShowProjectSidebar] = useState(false);
+  const openPagesRef = useRef<(() => void) | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [iframePreviewUrl, setIframePreviewUrl] = useState<string | null>(null);
   const [focusNodeFn, setFocusNodeFn] = useState<((nodeId: string) => void) | null>(null);
@@ -132,12 +131,12 @@ function CanvasContent() {
             projectId={projectId}
             selectedSitemap={selectedSitemap}
             selectedNode={selectedNode}
-            onSitemapClick={() => setShowBrowser(true)}
             onSelectSitemap={setSelectedSitemap}
             onSearchChange={handleSearchChange}
             onPageClick={handleNodeClick}
             onPagePreview={handlePagePreview}
             onProjectClick={() => setShowProjectSidebar(true)}
+            openPagesRef={openPagesRef}
           />
         </div>
         {/* <div className="flex items-center gap-2">
@@ -170,7 +169,7 @@ function CanvasContent() {
             searchTerm={searchTerm}
             onSelectSitemap={setSelectedSitemap}
             onSelectLayout={setSelectedLayout}
-            onBrowseSitemap={() => setShowBrowser(true)}
+            onBrowseSitemap={() => openPagesRef.current?.()}
             onFlowReady={handleFlowReady}
             onPreviewOpen={handlePreviewOpen}
             onFocusNode={handleFocusNode}
@@ -188,14 +187,6 @@ function CanvasContent() {
           )}
         </AnimatePresence>
       </div>
-
-      {/* Sitemap Browser Modal */}
-      <SitemapBrowser
-        isOpen={showBrowser}
-        onClose={() => setShowBrowser(false)}
-        projectId={projectId}
-        onNodeClick={handleNodeClick}
-      />
 
       {/* Project Sidebar */}
       <ProjectSidebar

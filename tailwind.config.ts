@@ -11,7 +11,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['var(--font-public-sans)', 'system-ui', 'sans-serif'],
-        serif: ['var(--font-instrument-serif)', 'Georgia', 'serif'],
+        serif: ['var(--font-oranienbaum)', 'Georgia', 'serif'],
       },
       colors: {
         border: 'hsl(var(--border))',

@@ -14,6 +14,7 @@ export function useHighResIcon(domain: string, url?: string) {
   const [iconUrl, setIconUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isRealIcon, setIsRealIcon] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -28,9 +29,33 @@ export function useHighResIcon(domain: string, url?: string) {
     abortControllerRef.current = abortController;
 
     const fetchIconForDomain = async (domainKey: string): Promise<string> => {
-      // Check cache first
-      if (domainIconCache.has(domainKey)) {
-        return domainIconCache.get(domainKey)!;
+      // Check cache first (but skip if it's the SVG fallback - retry to get real favicon)
+      const cached = domainIconCache.get(domainKey);
+      if (cached && !cached.startsWith('data:image/svg')) {
+        // Verify cached icon still works
+        try {
+          const img = new Image();
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Timeout')), 2000);
+            img.onload = () => {
+              clearTimeout(timeout);
+              resolve(cached);
+            };
+            img.onerror = () => {
+              clearTimeout(timeout);
+              reject(new Error('Cached icon failed'));
+            };
+            img.src = cached;
+          });
+          return cached;
+        } catch {
+          // Cached icon failed, clear it and try again
+          domainIconCache.delete(domainKey);
+        }
+      }
+      // If cached is SVG fallback, clear it and try again
+      if (cached && cached.startsWith('data:image/svg')) {
+        domainIconCache.delete(domainKey);
       }
 
       // Check if already fetching
@@ -40,8 +65,71 @@ export function useHighResIcon(domain: string, url?: string) {
 
       // Create the fetch promise
       const fetchPromise = (async () => {
+        // PRIMARY: Use Google favicon service (same as breadcrumb - we know this works!)
+        const googleFaviconSources = [
+          `https://www.google.com/s2/favicons?domain=${domainKey}&sz=256`,
+          `https://www.google.com/s2/favicons?domain=${domainKey}&sz=128`,
+          `https://www.google.com/s2/favicons?domain=${domainKey}&sz=64`,
+        ];
+
+        for (const source of googleFaviconSources) {
+          try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error('Timeout')), 3000);
+              img.onload = () => {
+                clearTimeout(timeout);
+                resolve(source);
+              };
+              img.onerror = () => {
+                clearTimeout(timeout);
+                reject(new Error('Failed to load'));
+              };
+              img.src = source;
+            });
+            
+            domainIconCache.set(domainKey, source);
+            return source;
+          } catch (err) {
+            continue;
+          }
+        }
+
+        // SECONDARY: Try Clearbit logos
+        const clearbitSources = [
+          `https://logo.clearbit.com/${domainKey}?size=256`,
+          `https://logo.clearbit.com/${domainKey}?size=128`,
+        ];
+
+        for (const source of clearbitSources) {
+          try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            
+            await new Promise((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error('Timeout')), 3000);
+              img.onload = () => {
+                clearTimeout(timeout);
+                resolve(source);
+              };
+              img.onerror = () => {
+                clearTimeout(timeout);
+                reject(new Error('Failed to load'));
+              };
+              img.src = source;
+            });
+            
+            domainIconCache.set(domainKey, source);
+            return source;
+          } catch (err) {
+            continue;
+          }
+        }
+
+        // TERTIARY: Try OG image for the root domain only
         try {
-          // Try to get OG image for the root domain only
           const rootUrl = `https://${domainKey}`;
           const ogResponse = await fetch(`/api/og-image?url=${encodeURIComponent(rootUrl)}`, {
             signal: abortController.signal,
@@ -55,37 +143,10 @@ export function useHighResIcon(domain: string, url?: string) {
             }
           }
         } catch (error) {
-          console.log(`OG image fetch failed for ${domainKey}, using fallback`);
+          console.log(`OG image fetch failed for ${domainKey}`);
         }
 
-        // Fallback to simple favicon services - request higher resolution
-        const fallbackSources = [
-          `https://logo.clearbit.com/${domainKey}?size=256`,
-          `https://logo.clearbit.com/${domainKey}?size=128`,
-          `https://www.google.com/s2/favicons?domain=${domainKey}&sz=256`,
-          `https://www.google.com/s2/favicons?domain=${domainKey}&sz=128`,
-          `https://www.google.com/s2/favicons?domain=${domainKey}&sz=64`,
-        ];
-
-        for (const source of fallbackSources) {
-          try {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            
-            await new Promise((resolve, reject) => {
-              img.onload = () => resolve(source);
-              img.onerror = () => reject(new Error('Failed to load'));
-              img.src = source;
-            });
-            
-            domainIconCache.set(domainKey, source);
-            return source;
-          } catch (err) {
-            continue;
-          }
-        }
-
-        // Final fallback - SVG with higher resolution
+        // Final fallback - SVG with higher resolution (but mark as not real)
         const svgFallback = `data:image/svg+xml;base64,${btoa(`
           <svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
             <rect width="256" height="256" fill="#4863B0"/>
@@ -110,13 +171,18 @@ export function useHighResIcon(domain: string, url?: string) {
       try {
         const icon = await fetchIconForDomain(domain);
         if (!abortController.signal.aborted) {
+          const isReal = !icon.startsWith('data:image/svg');
+          console.log(`🎨 Icon for ${domain}:`, icon.substring(0, 100), isReal ? '✅ REAL' : '❌ FALLBACK');
           setIconUrl(icon);
+          setIsRealIcon(isReal);
           setIsLoading(false);
         }
       } catch (error) {
         if (!abortController.signal.aborted) {
+          console.error(`❌ Failed to load icon for ${domain}:`, error);
           setError(true);
           setIsLoading(false);
+          setIsRealIcon(false);
         }
       }
     };
@@ -131,5 +197,5 @@ export function useHighResIcon(domain: string, url?: string) {
     };
   }, [domain]);
 
-  return { iconUrl, isLoading, error };
+  return { iconUrl, isLoading, error, isRealIcon };
 }

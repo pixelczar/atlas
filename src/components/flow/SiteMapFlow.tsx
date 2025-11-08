@@ -672,7 +672,6 @@ export default function SiteMapFlow({
         onSelectSitemap={onSelectSitemap || (() => {})}
         onSelectLayout={onSelectLayout || (() => {})}
         onBrowseSitemap={onBrowseSitemap}
-        onFitView={() => fitViewFunction?.()}
         onZoomIn={() => zoomInFunction?.()}
         onZoomOut={() => zoomOutFunction?.()}
         onResetLayout={resetManualPositioning}
