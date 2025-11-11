@@ -1,188 +1,233 @@
+'use client';
+
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { AtlasLogo } from '@/components/ui/AtlasLogo';
-import { Globe, Map, Users } from 'lucide-react';
-import Image from 'next/image';
+import { Globe, Map } from 'lucide-react';
 
 export default function HomePage() {
   return (
-    <div className="dark relative min-h-screen bg-[#0a0a0a]">
+    <div className="relative min-h-screen bg-white">
       {/* Dot Grid Background */}
       <div className="pointer-events-none absolute inset-0">
-        <div className="h-full w-full bg-[radial-gradient(#ffffff08_1px,transparent_1px)] bg-[size:32px_32px]"></div>
+        <div className="h-full w-full bg-[radial-gradient(#1a1a1a0d_1px,transparent_1px)] bg-[size:32px_32px]"></div>
       </div>
 
-      {/* Header */}
-      <header className="relative border-b border-gray-800">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-8">
-          <Link href="/">
-            <AtlasLogo size="lg" className="text-gray-50" />
-          </Link>
-          <nav className="flex items-center gap-8">
-            <Link
-              href="/canvas"
-              className="text-sm text-gray-400 transition-colors hover:text-gray-50"
-            >
-              Canvas
-            </Link>
-            <Link href="/auth">
-              <Button
-                variant="outline"
-                className="border-gray-700 bg-transparent text-sm font-normal text-gray-300 hover:bg-gray-800 hover:text-gray-50"
-              >
-                Sign In
-              </Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       {/* Hero */}
-      <section className="relative mx-auto max-w-7xl px-8 py-40">
-        <div className="grid grid-cols-1 gap-16 lg:grid-cols-2 lg:items-center">
-          {/* Left: Text Content */}
-          <div className="max-w-5xl">
-            <h1 className="font-serif text-8xl leading-[0.95] tracking-tight text-gray-50 lg:text-9xl">
-              Your sitemap,
-            </h1>
-            <h2 className="mt-2 font-serif text-8xl leading-[0.95] tracking-tight text-[#5B98D6] lg:text-9xl">
-              visualized
-            </h2>
-            <p className="mt-12 max-w-xl text-xl leading-relaxed text-gray-400">
-              Transform XML sitemaps into interactive, collaborative graphs. Preview
-              pages with thumbnails or live iframes—all in real-time.
-            </p>
-            <div className="mt-16 flex gap-4">
-              <Link href="/canvas">
-                <Button
-                  size="lg"
-                  className="h-14 bg-[#4863B0] px-10 text-base font-normal text-white hover:bg-[#5B98D6]"
-                >
-                  Try Demo Canvas
-                </Button>
-              </Link>
-              <Link href="/dashboard">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="h-14 border-gray-700 bg-transparent px-10 text-base font-normal text-gray-300 hover:bg-gray-800 hover:text-gray-50"
-                >
-                  View Projects
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Right: Graphic */}
-          <div className="relative flex items-center justify-end">
-            <div className="absolute -right-32 -top-20 lg:relative lg:right-0 lg:top-0">
-              <svg 
-                width="480" 
-                height="220" 
-                viewBox="0 0 184 84" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
-                className="opacity-70"
-              >
-                <path d="M156.389 63.1657L111.259 18.0364C108.694 15.471 105.213 14.0284 101.585 14.0284L80.8326 14.0284C77.2046 14.0284 73.7233 12.587 71.158 10.0217L65.4326 4.29636C64.094 2.95769 65.0433 0.669688 66.9353 0.669688L79.242 0.669687C82.1393 0.669687 84.9166 1.82036 86.9646 3.86836L89.25 6.15236C91.5633 8.46702 94.702 9.76702 97.974 9.76702L123.682 9.76702C127.31 9.76702 130.791 11.2084 133.357 13.7737L183.115 63.5323C184.453 64.871 183.507 67.159 181.614 67.1603L166.075 67.1737C162.442 67.1763 158.958 65.735 156.389 63.1657Z" fill="#9FC164" fillOpacity="0.4"/>
-                <path d="M132.566 71.4114L87.4365 26.282C84.8712 23.7167 81.3899 22.274 77.7619 22.274L57.0099 22.274C53.3819 22.274 49.9005 20.8327 47.3352 18.2674L33.2765 4.29671C31.9379 2.95805 32.8859 0.668712 34.7792 0.668712L47.0859 0.668711C49.9819 0.668711 52.7592 1.81937 54.8072 3.86737L65.4259 14.398C67.7405 16.7127 70.8792 18.0127 74.1512 18.0127L99.8592 18.0127C103.487 18.0127 106.969 19.454 109.534 22.0194L159.293 71.778C160.63 73.1167 159.685 75.4047 157.791 75.406L142.253 75.4194C138.619 75.422 135.135 73.9807 132.566 71.4114Z" fill="#9FC164" fillOpacity="0.8"/>
-                <path d="M108.743 79.6571L63.6138 34.5278C61.0485 31.9624 57.5671 30.5198 53.9391 30.5198L33.1871 30.5198C29.5591 30.5198 26.0778 29.0784 23.5125 26.5131L1.31511 4.31577C-0.0235561 2.9771 0.924442 0.689099 2.81778 0.689099L15.1244 0.689097C18.0218 0.689097 20.7991 1.83843 22.8471 3.88643L41.6031 22.6438C43.9178 24.9584 47.0565 26.2584 50.3285 26.2584L76.0364 26.2584C79.6644 26.2584 83.1458 27.6998 85.7111 30.2651L135.47 80.0238C136.807 81.3624 135.862 83.6504 133.968 83.6517L118.43 83.6651C114.796 83.6678 111.312 82.2264 108.743 79.6571Z" fill="#9FC164" fillOpacity="1"/>
+      <section className="relative mx-auto max-w-7xl px-8 py-24">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          {/* Left: Logo */}
+          <motion.div 
+            className="flex justify-center lg:justify-start"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <div>
+              <svg width="373" height="210" viewBox="0 0 373 210" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-auto h-48 lg:h-64">
+                <path d="M17.8579 154.825L57.6681 115.015C59.931 112.752 61.2036 109.681 61.2036 106.481L61.2036 88.1747C61.2036 84.9743 62.4751 81.9033 64.7381 79.6403L69.7886 74.5898C70.9695 73.4089 72.9878 74.2464 72.9878 75.9154L72.9878 86.7715C72.9878 89.3273 71.9727 91.7773 70.1661 93.5839L68.1513 95.5999C66.1095 97.6406 64.9627 100.409 64.9627 103.296L64.9627 125.974C64.9627 129.174 63.6913 132.245 61.4283 134.508L17.5345 178.402C16.3536 179.581 14.3353 178.748 14.3341 177.077L14.3223 163.37C14.32 160.165 15.5914 157.092 17.8579 154.825Z" fill="#B3C4EC"/>
+                <path d="M69.6604 40.5919L29.8503 80.402C27.5873 82.665 26.3147 85.736 26.3147 88.9364L26.3147 107.242C26.3147 110.443 25.0432 113.514 22.7802 115.777L3.1992 135.358C2.01832 136.539 -5.21213e-06 135.702 -5.13913e-06 134.032L-4.66459e-06 123.176C-4.55287e-06 120.62 1.01387 118.17 2.82048 116.364L19.367 99.8184C21.4088 97.7766 22.5556 95.0078 22.5556 92.1215L22.5556 69.4436C22.5556 66.2432 23.827 63.1722 26.09 60.9092L69.9839 17.0154C71.1647 15.8357 73.1831 16.6696 73.1842 18.3398L73.196 32.047C73.1984 35.252 71.9269 38.3254 69.6604 40.5919Z" fill="#14285F"/>
+                <path d="M3.54028 140.569L43.3504 100.759C45.6134 98.4957 46.886 95.4247 46.886 92.2243L46.886 73.9182C46.886 70.7178 48.1575 67.6468 50.4204 65.3839L70.0015 45.8028C71.1824 44.6219 73.2007 45.4582 73.2007 47.1284L73.2007 57.9845C73.2007 60.5404 72.1868 62.9903 70.3802 64.7969L53.8337 81.3423C51.7919 83.3841 50.6451 86.1528 50.6451 89.0392L50.6451 111.717C50.6451 114.917 49.3736 117.988 47.1107 120.251L3.21683 164.145C2.03594 165.325 0.0176244 164.491 0.0164482 162.821L0.00468327 149.114C0.00233077 145.909 1.27378 142.835 3.54028 140.569Z" fill="#4863B0"/>
+                <path d="M156.923 97.8403H127.763L120.651 122.022L129.897 125.578V127H108.56V125.578L117.806 122.022L145.543 25.2967H147.677L177.548 123.444L186.082 125.578V127H156.211V125.578L164.746 123.444L156.923 97.8403ZM128.474 95.1377H156.069L141.845 48.0555L128.474 95.1377ZM213.003 61.5685V64.4134H196.645V109.789C196.645 115.573 197.688 119.793 199.774 122.448C201.86 125.009 204.136 126.289 206.602 126.289C209.826 126.289 212.529 125.103 214.71 122.733C216.986 120.267 218.313 116.711 218.693 112.065H220.826C220.447 117.47 218.787 121.69 215.848 124.724C213.003 127.664 209.447 129.134 205.179 129.134C199.11 129.134 194.274 127.379 190.671 123.871C187.067 120.267 185.266 115.621 185.266 109.931V64.4134H173.175V61.5685H185.266V45.2107L196.645 37.3873V61.5685H213.003ZM228.005 123.444V30.9864L219.47 28.8528V27.4304H239.384V123.444L247.919 125.578V127H219.47V125.578L228.005 123.444ZM287.019 92.1506C278.769 92.1506 272.652 93.9998 268.67 97.6981C264.782 101.302 262.838 106.327 262.838 112.776C262.838 117.043 263.881 120.362 265.967 122.733C268.053 125.103 270.329 126.289 272.795 126.289C275.07 126.289 277.062 125.625 278.769 124.297C280.571 122.97 282.088 121.5 283.321 119.888C284.743 118.086 285.976 115.953 287.019 113.487V92.1506ZM276.351 61.5685C273.506 61.5685 271.135 62.5642 269.239 64.5556C267.342 66.4522 266.394 69.0125 266.394 72.2367C266.394 72.9953 266.394 73.6591 266.394 74.2281C266.489 74.7971 266.583 75.3186 266.678 75.7928C266.773 76.2669 266.915 76.741 267.105 77.2152L255.726 80.06C255.536 79.7755 255.394 79.3962 255.299 78.9221C255.204 78.4479 255.109 77.9264 255.014 77.3574C255.014 76.7885 255.014 76.0298 255.014 75.0816C255.014 73.0902 255.488 71.1936 256.437 69.3919C257.385 67.4953 258.76 65.8358 260.562 64.4134C262.458 62.8961 264.687 61.7108 267.247 60.8573C269.902 59.909 272.937 59.4349 276.351 59.4349C283.178 59.4349 288.536 61.3789 292.424 65.2668C296.407 69.1548 298.398 74.3229 298.398 80.7712V123.444L306.933 125.578V127H287.019V118.465C285.976 120.457 284.648 122.259 283.036 123.871C281.708 125.198 280.002 126.384 277.915 127.427C275.924 128.565 273.506 129.134 270.661 129.134C263.833 129.134 258.665 127.522 255.157 124.297C251.743 121.073 250.036 116.759 250.036 111.353C250.036 108.698 250.747 106.043 252.169 103.388C253.687 100.733 255.915 98.3619 258.855 96.2757C261.889 94.1894 265.73 92.5299 270.376 91.2972C275.023 89.9696 280.571 89.3058 287.019 89.3058V80.7712C287.019 73.6591 285.928 68.6806 283.747 65.8358C281.661 62.991 279.196 61.5685 276.351 61.5685ZM333.937 129.134C330.902 129.134 328.294 128.754 326.113 127.996C323.932 127.332 322.178 126.526 320.85 125.578C319.238 124.534 317.911 123.349 316.867 122.022C316.488 123.444 315.682 124.772 314.449 126.004C313.311 127.237 312.221 128.043 311.178 128.422H309.044C309.139 127.19 309.234 125.909 309.329 124.582C309.423 123.444 309.518 122.259 309.613 121.026C309.708 119.698 309.755 118.371 309.755 117.043C309.755 115.621 309.708 114.198 309.613 112.776C309.518 111.353 309.423 110.073 309.329 108.935C309.234 107.608 309.139 106.28 309.044 104.952H311.178C312.98 111.78 315.73 117.043 319.428 120.741C323.126 124.44 327.488 126.289 332.514 126.289C336.497 126.289 339.721 125.056 342.187 122.59C344.747 120.125 346.027 117.09 346.027 113.487C346.027 110.927 345.126 108.698 343.325 106.802C341.618 104.905 339.437 103.198 336.781 101.681C334.126 100.069 331.281 98.5041 328.247 96.9869C325.212 95.4696 322.368 93.7627 319.712 91.8661C317.057 89.9696 314.829 87.7411 313.027 85.1808C311.32 82.6204 310.467 79.4911 310.467 75.7928C310.467 73.7065 310.941 71.6677 311.889 69.6763C312.837 67.6849 314.117 65.9306 315.73 64.4134C317.436 62.8961 319.475 61.7108 321.846 60.8573C324.217 59.909 326.824 59.4349 329.669 59.4349C332.135 59.4349 334.268 59.8142 336.07 60.5728C337.967 61.3315 339.579 62.1375 340.906 62.991C342.329 64.0341 343.562 65.2194 344.605 66.547C344.984 65.1246 345.743 63.797 346.881 62.5642C348.113 61.3315 349.251 60.5254 350.294 60.1461H352.428C352.238 61.3789 352.096 62.6591 352.001 63.9866C351.907 65.1246 351.812 66.3574 351.717 67.6849C351.717 69.0125 351.717 70.2927 351.717 71.5255C351.717 72.9479 351.717 74.4177 351.717 75.935C351.812 77.3574 351.907 78.6376 352.001 79.7755C352.096 81.1031 352.238 82.3833 352.428 83.6161H350.294C348.493 76.7885 345.838 71.5255 342.329 67.8272C338.82 64.1289 335.075 62.2797 331.092 62.2797C327.868 62.2797 325.165 63.3703 322.984 65.5513C320.803 67.6375 319.712 70.1031 319.712 72.9479C319.712 75.3186 320.613 77.3574 322.415 79.0643C324.217 80.7712 326.445 82.3833 329.1 83.9006C331.756 85.323 334.648 86.7928 337.777 88.3101C341.001 89.8273 343.941 91.5817 346.596 93.5731C349.251 95.5644 351.48 97.9351 353.282 100.685C355.083 103.435 355.984 106.754 355.984 110.642C355.984 112.918 355.415 115.194 354.277 117.47C353.234 119.651 351.717 121.642 349.725 123.444C347.829 125.151 345.506 126.526 342.756 127.569C340.1 128.612 337.161 129.134 333.937 129.134Z" fill="#14285F"/>
               </svg>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="relative border-t border-gray-800">
-        <div className="mx-auto max-w-7xl px-8 py-32">
-          <div className="mb-20">
-            <h3 className="font-serif text-5xl tracking-tight text-gray-50">
-              Features
-            </h3>
-          </div>
-          <div className="grid gap-x-16 gap-y-20 md:grid-cols-2 lg:grid-cols-4">
-            {/* Feature 1 */}
-            <div>
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-lg border border-[#5B98D6]/20 bg-[#5B98D6]/10">
-                <Globe className="h-6 w-6 text-[#5B98D6]" strokeWidth={1.5} />
-              </div>
-              <h4 className="mb-3 text-xl font-medium text-gray-50">
-                Sitemap Import
-              </h4>
-              <p className="text-base leading-relaxed text-gray-400">
-                Parse WordPress XML sitemaps and visualize site structure
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div>
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-lg border border-[#5B98D6]/20 bg-[#5B98D6]/10">
-                <svg
-                  className="h-6 w-6 text-[#5B98D6]"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
+          </motion.div>
+          
+          {/* Right: Content */}
+          <motion.div 
+            className="text-left"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <motion.p 
+              className="text-xl font-medium text-[#1a1a1a]"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            >
+              Visual Sitemap Explorer
+            </motion.p>
+            <motion.p 
+              className="mt-8 text-base leading-relaxed text-[#1a1a1a]/60"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              A tool that takes website sitemaps (e.g. WordPress XML), loads each page, and visualizes the site as a zoomable, draggable graph.
+            </motion.p>
+            <motion.div 
+              className="mt-10"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <Link href="/dashboard">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-[#4863B0]/30 bg-transparent px-5 text-sm font-normal text-[#1a1a1a]/70 hover:bg-[#4863B0]/10 hover:text-[#1a1a1a]"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"
-                  />
-                </svg>
-              </div>
-              <h4 className="mb-3 text-xl font-medium text-gray-50">
-                Live Previews
-              </h4>
-              <p className="text-base leading-relaxed text-gray-400">
-                Toggle between thumbnails and iframe previews instantly
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div>
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-lg border border-[#9FC164]/20 bg-[#9FC164]/10">
-                <Users className="h-6 w-6 text-[#9FC164]" strokeWidth={1.5} />
-              </div>
-              <h4 className="mb-3 text-xl font-medium text-gray-50">
-                Realtime Collab
-              </h4>
-              <p className="text-base leading-relaxed text-gray-400">
-                Work together with live updates via Firebase
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div>
-              <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-lg border border-[#CAD890]/30 bg-[#CAD890]/10">
-                <Map className="h-6 w-6 text-[#CAD890]" strokeWidth={1.5} />
-              </div>
-              <h4 className="mb-3 text-xl font-medium text-gray-50">
-                Interactive Graph
-              </h4>
-              <p className="text-base leading-relaxed text-gray-400">
-                Zoom, pan, and organize with React Flow
-              </p>
-            </div>
-          </div>
+                  Open Dashboard
+                </Button>
+              </Link>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
+
+      {/* How It Works & Technology Stack */}
+      <motion.section 
+        className="relative border-t border-[#4863B0]/20 bg-[#4863B0]/5"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.6, delay: 0.8 }}
+      >
+        <div className="mx-auto max-w-7xl px-8 py-24">
+          <div className="grid gap-16 lg:grid-cols-3">
+            {/* How It Works - 2/3 width */}
+            <motion.div 
+              className="lg:col-span-2"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6, delay: 0.9 }}
+            >
+              <motion.h2 
+                className="mb-12 font-serif text-4xl tracking-tight text-[#1a1a1a]"
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 1.0 }}
+              >
+                How It Works
+              </motion.h2>
+              <div className="space-y-8">
+                {[
+                  {
+                    title: "1. Enter a Domain",
+                    text: "Atlas automatically checks for sitemap.xml at the root of the domain.",
+                  },
+                  {
+                    title: "2. Parse Sitemap",
+                    text: "Extracts all URLs from the sitemap, including nested sitemaps. Supports WordPress XML sitemaps and standard XML sitemap formats.",
+                  },
+                  {
+                    title: "3. Create Visualization",
+                    text: "Each page becomes a node in an interactive graph. Nodes show thumbnail screenshots by default and can be toggled to show live iframe previews.",
+                  },
+                ].map((item, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.5, delay: 1.1 + idx * 0.1 }}
+                  >
+                    <h3 className="mb-3 text-xl font-medium text-[#1a1a1a]">
+                      {item.title}
+                    </h3>
+                    <p className="text-base leading-relaxed text-[#1a1a1a]/60">
+                      {item.text.includes('sitemap.xml') ? (
+                        <>
+                          Atlas automatically checks for <code className="px-1.5 py-0.5 rounded bg-[#4863B0]/10 text-[#4863B0] text-sm">sitemap.xml</code> at the root of the domain.
+                        </>
+                      ) : (
+                        item.text
+                      )}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+
+            {/* Technology Stack - 1/3 width */}
+            <motion.div 
+              className="lg:col-span-1"
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-100px" }}
+              transition={{ duration: 0.6, delay: 1.0 }}
+            >
+              <motion.h2 
+                className="mb-12 font-serif text-4xl tracking-tight text-[#1a1a1a]"
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: 1.1 }}
+              >
+                Technology Stack
+              </motion.h2>
+              <div className="space-y-8">
+                {[
+                  {
+                    title: "Frontend",
+                    items: [
+                      "Next.js 15 (App Router, TypeScript)",
+                      "Tailwind CSS",
+                      "React Flow",
+                      "Framer Motion",
+                    ],
+                  },
+                  {
+                    title: "Backend",
+                    items: [
+                      "Firebase (Firestore, Storage, Auth)",
+                      "Node.js scripts for sitemap crawling",
+                      "Puppeteer for screenshot generation",
+                    ],
+                  },
+                ].map((section, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.5, delay: 1.2 + idx * 0.1 }}
+                  >
+                    <h3 className="mb-3 text-lg font-medium text-[#1a1a1a]">{section.title}</h3>
+                    <ul className="space-y-2 text-base leading-relaxed text-[#1a1a1a]/60">
+                      {section.items.map((item, itemIdx) => (
+                        <motion.li
+                          key={itemIdx}
+                          initial={{ opacity: 0, y: 10 }}
+                          whileInView={{ opacity: 1, y: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ duration: 0.3, delay: 1.3 + idx * 0.1 + itemIdx * 0.05 }}
+                        >
+                          • {item}
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </motion.section>
 
       {/* Footer */}
-      <footer className="relative border-t border-gray-800">
+      <motion.footer 
+        className="relative border-t border-[#4863B0]/20"
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.6, delay: 1.5 }}
+      >
         <div className="mx-auto max-w-7xl px-8 py-12">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Globe className="h-4 w-4 text-gray-600" strokeWidth={1.5} />
-              <span className="text-sm text-gray-500">
+              <Globe className="h-4 w-4 text-[#1a1a1a]/40" strokeWidth={1.5} />
+              <span className="text-sm text-[#1a1a1a]/50">
                 Atlas - Visual Sitemap Explorer
               </span>
             </div>
-            <p className="text-sm text-gray-600">© 2025</p>
+            <p className="text-sm text-[#1a1a1a]/40">© 2025</p>
           </div>
         </div>
-      </footer>
+      </motion.footer>
     </div>
   );
 }

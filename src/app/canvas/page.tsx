@@ -123,7 +123,7 @@ function CanvasContent() {
             onClick={() => router.push('/dashboard')}
             className="transition-opacity hover:opacity-70 pr-4 border-r border-[#5B98D6]/20"
           >
-            <AtlasLogo size="md" />
+            <AtlasLogo size="lg"className="mt-1" />
           </button>
 
           {/* Breadcrumb */}

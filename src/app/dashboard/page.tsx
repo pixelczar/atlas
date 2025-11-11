@@ -121,24 +121,8 @@ export default function DashboardPage() {
       <header className="border-b border-[#5B98D6]/20">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
           <Link href="/">
-            <AtlasLogo size="md" className="text-[#1a1a1a]" />
+            <AtlasLogo size="lg" className="text-[#1a1a1a] mt-2" />
           </Link>
-          <nav className="flex items-center gap-6">
-            <Link
-              href="/canvas"
-              className="text-xs text-[#1a1a1a]/70 transition-colors hover:text-[#1a1a1a]"
-            >
-              Canvas
-            </Link>
-            <Link href="/auth">
-              <Button
-                variant="outline"
-                className="h-7 border-[#4863B0]/30 bg-transparent px-3 text-xs font-normal text-[#1a1a1a]/70 hover:bg-[#4863B0]/10 hover:text-[#1a1a1a]"
-              >
-                Sign Out
-              </Button>
-            </Link>
-          </nav>
         </div>
       </header>
 
@@ -162,15 +146,8 @@ export default function DashboardPage() {
           </Button>
         </div>
 
-        {/* Loading state */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-12 w-12 animate-spin text-[#4863B0]/50" />
-          </div>
-        )}
-
         {/* Empty state */}
-        {!isLoading && projects.length === 0 && (
+        {projects.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#5B98D6]/30 py-16">
             <Globe className="mb-3 h-12 w-12 text-[#5B98D6]/40" />
             <h3 className="mb-1.5 text-lg font-medium text-[#1a1a1a]">
@@ -190,16 +167,16 @@ export default function DashboardPage() {
         )}
 
         {/* Projects grid */}
-        {!isLoading && projects.length > 0 && (
+        {projects.length > 0 && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {projects.map((project, index) => (
               <motion.div
                 key={project.id}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
-                  duration: 0.2,
-                  delay: index * 0.08,
+                  duration: 0.6,
+                  delay: index * 0.05,
                   ease: [0.16, 1, 0.3, 1],
                 }}
               >
