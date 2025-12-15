@@ -34,7 +34,10 @@ function FlowControls({
   setZoomInFunction,
   setZoomOutFunction,
   setFocusNodeFunction,
-  onFocusNode
+  onFocusNode,
+  isPanning,
+  isPanningRef,
+  isPreviewOpen
 }: { 
   onFlowReady?: (noopFitView: () => void, regrid: () => void) => void;
   nodes: any[];
@@ -45,6 +48,9 @@ function FlowControls({
   setZoomOutFunction: (fn: () => void) => void;
   setFocusNodeFunction: (fn: (nodeId: string) => void) => void;
   onFocusNode?: (focusNodeFn: (nodeId: string) => void) => void;
+  isPanning: boolean;
+  isPanningRef: React.MutableRefObject<boolean>;
+  isPreviewOpen: boolean;
 }) {
   const { zoomIn, zoomOut, setCenter, getViewport, setViewport } = useReactFlow();
   const viewportRef = useRef<{ x: number; y: number; zoom: number } | null>(null);
@@ -70,6 +76,18 @@ function FlowControls({
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
 
+    // Don't focus if user is currently panning (check both state and ref for reliability)
+    if (isPanning || isPanningRef.current) {
+      console.log('⏸️ Skipping focus - user is panning');
+      return;
+    }
+
+    // Don't focus if preview is open - let user pan freely
+    if (isPreviewOpen) {
+      console.log('⏸️ Skipping focus - preview is open');
+      return;
+    }
+
     // Calculate node center point
     const nodeWidth = 288; // Standard node width
     const nodeHeight = 150; // Standard node height
@@ -77,8 +95,9 @@ function FlowControls({
     const y = node.position.y + nodeHeight / 2;
 
     // Center on the node with a more comfortable zoom level
-    setCenter(x, y, { zoom: 0.8, duration: 800 });
-  }, [nodes, setCenter]);
+    // Use shorter duration to feel more responsive
+    setCenter(x, y, { zoom: 0.8, duration: 400 });
+  }, [nodes, setCenter, isPanning, isPreviewOpen]);
 
   useEffect(() => {
     setFitViewFunction(() => {});
@@ -107,6 +126,8 @@ interface SiteMapFlowProps {
   onPreviewOpen?: (url: string) => void;
   onFocusNode?: (focusNodeFn: (nodeId: string) => void) => void;
   onNodeSelection?: (node: { id: string; url: string; title: string } | null) => void;
+  onDeselectNodes?: (deselectFn: () => void) => void;
+  isPreviewOpen?: boolean;
 }
 
 export default function SiteMapFlow({
@@ -120,7 +141,9 @@ export default function SiteMapFlow({
   onFlowReady,
   onPreviewOpen,
   onFocusNode,
-  onNodeSelection
+  onNodeSelection,
+  onDeselectNodes,
+  isPreviewOpen = false
 }: SiteMapFlowProps) {
   const [fitViewFunction, setFitViewFunction] = useState<(() => void) | null>(null);
   const [regridFunction, setRegridFunction] = useState<(() => void) | null>(null);
@@ -354,9 +377,48 @@ export default function SiteMapFlow({
 
   // Track if user is dragging to prevent auto-preview
   const [hasMoved, setHasMoved] = useState(false);
+  // Track if user is panning the canvas to prevent viewport resets
+  const [isPanning, setIsPanning] = useState(false);
+  // Use ref for more reliable panning tracking (state updates are async)
+  const isPanningRef = useRef(false);
+  // Track if preview is being closed to prevent auto-reopening
+  const isClosingPreviewRef = useRef(false);
+
+  // Function to deselect all nodes
+  const deselectAllNodes = useCallback(() => {
+    // Set flag to prevent auto-reopening
+    isClosingPreviewRef.current = true;
+    
+    setNodes((nds) =>
+      nds.map((node) => ({
+        ...node,
+        selected: false,
+      }))
+    );
+    setSelectedNodes([]);
+    if (onNodeSelection) {
+      onNodeSelection(null);
+    }
+    
+    // Reset flag after a delay to allow normal selection behavior
+    setTimeout(() => {
+      isClosingPreviewRef.current = false;
+    }, 300);
+  }, [setNodes, onNodeSelection]);
+
+  // Expose deselect function to parent
+  useEffect(() => {
+    if (onDeselectNodes) {
+      onDeselectNodes(deselectAllNodes);
+    }
+  }, [onDeselectNodes, deselectAllNodes]);
 
   // Handle node selection changes - lightweight, no Firebase sync
   const onSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: any[] }) => {
+    // Don't update selection if we're closing the preview
+    if (isClosingPreviewRef.current) {
+      return;
+    }
     // Only update if selection actually changed to prevent unnecessary re-renders
     setSelectedNodes(prev => {
       if (prev.length !== selectedNodes.length || 
@@ -367,18 +429,27 @@ export default function SiteMapFlow({
     });
   }, []);
 
-  // Auto-open preview when single node is selected (but not if it was a drag)
+  // Auto-open preview when single node is selected (but not if it was a drag or pan)
   useEffect(() => {
-    if (selectedNodes.length === 1 && onPreviewOpen && !hasMoved) {
+    // Don't auto-open if we're closing the preview, panning, or has moved (dragged)
+    if (isClosingPreviewRef.current) {
+      return;
+    }
+    
+    // Don't auto-open if user is panning or has moved (dragged)
+    if (selectedNodes.length === 1 && onPreviewOpen && !hasMoved && !isPanning) {
       const selectedNode = selectedNodes[0];
       if (selectedNode?.data?.url) {
         console.log('🎯 Auto-opening preview for selected node:', selectedNode.data.url);
         onPreviewOpen(selectedNode.data.url);
         
-        // Also focus the node
-        if (focusNodeFunction) {
+        // Only focus the node if we're not currently panning and preview is not open
+        if (focusNodeFunction && !isPanning && !isPanningRef.current && !isPreviewOpen) {
           setTimeout(() => {
-            focusNodeFunction(selectedNode.id);
+            // Triple-check panning state and preview state
+            if (!isPanning && !isPanningRef.current && !isPreviewOpen) {
+              focusNodeFunction(selectedNode.id);
+            }
           }, 100);
         }
       }
@@ -397,12 +468,28 @@ export default function SiteMapFlow({
         onNodeSelection(null);
       }
     }
-  }, [selectedNodes, onPreviewOpen, focusNodeFunction, onNodeSelection, hasMoved]);
+  }, [selectedNodes, onPreviewOpen, focusNodeFunction, onNodeSelection, hasMoved, isPanning]);
 
   // Handle node drag start
   const onNodeDragStart = useCallback((event: any, node: any) => {
     setIsManuallyMoving(true);
     setHasMoved(true); // Assume any drag start means user is dragging
+  }, []);
+
+  // Track canvas panning to prevent viewport resets
+  const onMoveStart = useCallback(() => {
+    // User started panning the canvas
+    setIsPanning(true);
+    isPanningRef.current = true;
+  }, []);
+
+  const onMoveEnd = useCallback(() => {
+    // Reset panning state after a longer delay to prevent immediate focus
+    // This gives time for any pending focus calls to check the ref
+    setTimeout(() => {
+      setIsPanning(false);
+      isPanningRef.current = false;
+    }, 500); // Increased delay to ensure focus doesn't fire
   }, []);
 
   // PERFORMANCE: Debounced position saving to prevent excessive Firestore writes
@@ -587,6 +674,8 @@ export default function SiteMapFlow({
             onSelectionChange={onSelectionChange}
             onNodeDragStart={onNodeDragStart}
             onNodeDragStop={onNodeDragStop}
+            onMoveStart={onMoveStart}
+            onMoveEnd={onMoveEnd}
             onInit={(instance) => { 
               reactFlowInstance.current = instance;
               // Removed automatic fitView to prevent zoom reset
@@ -635,6 +724,9 @@ export default function SiteMapFlow({
             setZoomOutFunction={setZoomOutFunction}
             setFocusNodeFunction={setFocusNodeFunction}
             onFocusNode={onFocusNode}
+            isPanning={isPanning}
+            isPanningRef={isPanningRef}
+            isPreviewOpen={isPreviewOpen}
           />
           <Background gap={16} size={1} className="bg-[#F8FAFC]" color="#5B98D6" />
           

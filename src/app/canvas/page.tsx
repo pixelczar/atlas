@@ -57,6 +57,7 @@ function CanvasContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [iframePreviewUrl, setIframePreviewUrl] = useState<string | null>(null);
   const [focusNodeFn, setFocusNodeFn] = useState<((nodeId: string) => void) | null>(null);
+  const [deselectNodesFn, setDeselectNodesFn] = useState<(() => void) | null>(null);
   const [selectedNode, setSelectedNode] = useState<{
     id: string;
     url: string;
@@ -71,17 +72,36 @@ function CanvasContent() {
     setFocusNodeFn(() => focusNodeFunction);
   }, []);
 
+  const handleDeselectNodes = useCallback((deselectFunction: () => void) => {
+    setDeselectNodesFn(() => deselectFunction);
+  }, []);
+
   const handleSearchChange = useCallback((term: string) => {
     setSearchTerm(term);
   }, []);
 
   const handlePreviewOpen = useCallback((url: string) => {
-    setIframePreviewUrl(url);
+    // Only set if different to prevent duplicate previews
+    setIframePreviewUrl(prev => {
+      if (prev === url) {
+        return prev; // Already showing this URL
+      }
+      return url;
+    });
   }, []);
 
   const handlePreviewClose = useCallback(() => {
+    // Deselect nodes first to prevent auto-reopening
+    if (deselectNodesFn) {
+      deselectNodesFn();
+    }
+    // Clear preview and ensure it's fully closed
     setIframePreviewUrl(null);
-  }, []);
+    // Force a small delay to ensure AnimatePresence processes the exit
+    setTimeout(() => {
+      setIframePreviewUrl(null);
+    }, 100);
+  }, [deselectNodesFn]);
 
   // Test Firestore connection on mount
   useEffect(() => {
@@ -174,6 +194,8 @@ function CanvasContent() {
             onPreviewOpen={handlePreviewOpen}
             onFocusNode={handleFocusNode}
             onNodeSelection={handleNodeSelection}
+            onDeselectNodes={handleDeselectNodes}
+            isPreviewOpen={!!iframePreviewUrl}
           />
         </div>
 

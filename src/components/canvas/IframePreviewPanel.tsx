@@ -117,12 +117,19 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
   return (
     <motion.div
       ref={panelRef}
+      key={url} // Use URL as key to ensure proper cleanup when URL changes
       initial={{ width: 0, opacity: 0 }}
       animate={{ width: `${width}px`, opacity: 1 }}
       exit={{ width: 0, opacity: 0 }}
-      transition={{ duration: 0 }}
+      transition={{ duration: 0.2, ease: 'easeInOut' }}
       className="relative z-40 flex flex-col border-l-2 border-[#5B98D6]/30 bg-white shadow-2xl"
       style={{ minWidth: width > 0 ? `${width}px` : 0 }}
+      onAnimationComplete={(definition: any) => {
+        // Cleanup when exit animation completes
+        if (definition.width === 0 && !url) {
+          // Panel has fully closed
+        }
+      }}
     >
         {/* Resize Handle - Much wider hit area */}
         <div
@@ -247,31 +254,39 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
                 sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
                 onError={handleIframeError}
                 onLoad={(e) => {
-                  // Check if iframe loaded successfully after a short delay
-                  // This gives time for X-Frame-Options errors to manifest
-                  setTimeout(() => {
-                    try {
-                      const iframe = e.target as HTMLIFrameElement;
-                      if (iframe.contentWindow) {
-                        // Try to access contentDocument - will fail for cross-origin
-                        // but that's OK, we just want to check if iframe exists
-                        try {
-                          // For same-origin, we can check document
-                          const doc = iframe.contentWindow.document;
-                          if (!doc || doc.body.children.length === 0) {
-                            // Empty document might indicate blocking
-                            // But we can't be sure, so don't auto-show error
-                          }
-                        } catch (crossOriginError) {
-                          // Cross-origin is normal and fine
-                          // Iframe loaded, just can't access content (expected)
+                  // Note: Console errors from iframe content (CORS, network failures) are expected
+                  // and cannot be suppressed for cross-origin iframes due to browser security.
+                  // These errors come from third-party scripts in the loaded page and don't affect functionality.
+                  try {
+                    const iframe = e.target as HTMLIFrameElement;
+                    // Try to suppress errors for same-origin iframes only
+                    if (iframe.contentWindow) {
+                      try {
+                        const iframeWindow = iframe.contentWindow as any;
+                        // Only works for same-origin iframes
+                        if (iframeWindow.console && iframeWindow.console.error) {
+                          const originalError = iframeWindow.console.error;
+                          iframeWindow.console.error = (...args: any[]) => {
+                            const errorMsg = args.join(' ');
+                            const isExpectedError = 
+                              errorMsg.includes('CORS') ||
+                              errorMsg.includes('Access-Control-Allow-Origin') ||
+                              errorMsg.includes('ERR_BLOCKED_BY_CLIENT') ||
+                              errorMsg.includes('ERR_FAILED') ||
+                              errorMsg.includes('net::ERR_');
+                            
+                            if (!isExpectedError) {
+                              originalError.apply(iframeWindow.console, args);
+                            }
+                          };
                         }
+                      } catch (crossOriginError) {
+                        // Cross-origin iframe - cannot access console (expected)
                       }
-                    } catch (error) {
-                      // Iframe might be blocked, but we can't reliably detect
-                      // User can click "Page not loading?" if needed
                     }
-                  }, 1000);
+                  } catch (error) {
+                    // Ignore errors during iframe setup
+                  }
                 }}
               />
             </div>
