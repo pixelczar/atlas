@@ -28,7 +28,7 @@
     "firebase": "^11.3.0",
     "framer-motion": "^11.18.0",
     "lucide-react": "^0.469.0",
-    "next": "^15.5.4",
+    "next": "^16.1.1",
     "postcss": "^8.4.35",
     "puppeteer": "^22.15.0",
     "react": "^19.0.0",
@@ -41,7 +41,7 @@
   "devDependencies": {
     "@types/xml2js": "^0.4.14",
     "eslint": "^9.36.0",
-    "eslint-config-next": "^15.5.4",
+    "eslint-config-next": "^16.1.1",
     "prettier": "^3.4.2",
     "prettier-plugin-tailwindcss": "^0.5.11",
     "xml2js": "^0.6.2"
