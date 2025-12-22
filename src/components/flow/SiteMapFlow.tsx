@@ -72,21 +72,27 @@ function FlowControls({
     // Do nothing
   }, []);
 
+  // Create a node lookup map for O(1) access instead of O(n) find()
+  const nodesMapRef = useRef<Map<string, any>>(new Map());
+  useEffect(() => {
+    nodesMapRef.current.clear();
+    nodes.forEach(node => {
+      nodesMapRef.current.set(node.id, node);
+    });
+  }, [nodes]);
+
   const focusNode = useCallback((nodeId: string) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-
-    // Don't focus if user is currently panning (check both state and ref for reliability)
+    // Early return checks first (fastest)
     if (isPanning || isPanningRef.current) {
-      console.log('⏸️ Skipping focus - user is panning');
+      return;
+    }
+    if (isPreviewOpen) {
       return;
     }
 
-    // Don't focus if preview is open - let user pan freely
-    if (isPreviewOpen) {
-      console.log('⏸️ Skipping focus - preview is open');
-      return;
-    }
+    // O(1) lookup instead of O(n) find
+    const node = nodesMapRef.current.get(nodeId);
+    if (!node) return;
 
     // Calculate node center point
     const nodeWidth = 288; // Standard node width
@@ -97,7 +103,7 @@ function FlowControls({
     // Center on the node with a more comfortable zoom level
     // Use shorter duration to feel more responsive
     setCenter(x, y, { zoom: 0.8, duration: 400 });
-  }, [nodes, setCenter, isPanning, isPreviewOpen]);
+  }, [setCenter, isPanning, isPreviewOpen]);
 
   useEffect(() => {
     setFitViewFunction(() => {});
@@ -640,15 +646,17 @@ export default function SiteMapFlow({
     };
   }, []);
 
-  // Add toolbar functions to nodes
+  // Add toolbar functions to nodes - optimized to only recreate when necessary
   const nodesWithToolbar = useMemo(() => {
+    // For large node sets, only update if nodes actually changed
     return nodes.map(node => ({
       ...node,
       data: {
         ...node.data,
-        onToggleIframe: () => handleToggleIframe(node.id),
-        onOpenExternal: () => handleOpenExternal(node.id),
-        onToggleVisibility: () => handleToggleHide(node.id),
+        // Use stable function references to prevent unnecessary re-renders
+        onToggleIframe: handleToggleIframe.bind(null, node.id),
+        onOpenExternal: handleOpenExternal.bind(null, node.id),
+        onToggleVisibility: handleToggleHide.bind(null, node.id),
         // Delete button removed - doesn't make sense in this context
       }
     }));

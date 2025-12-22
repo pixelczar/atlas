@@ -16,6 +16,7 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
   const [isResizing, setIsResizing] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.67); // Default 67% zoom
   const [iframeError, setIframeError] = useState(false);
+  const [shouldLoadIframe, setShouldLoadIframe] = useState(false); // Defer iframe loading
   const panelRef = useRef<HTMLDivElement>(null);
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -88,9 +89,15 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
     setZoomLevel(1.0);
   };
 
-  // Reset error state when URL changes
+  // Reset error state and defer iframe loading when URL changes
   useEffect(() => {
     setIframeError(false);
+    setShouldLoadIframe(false);
+    // Defer iframe loading until after animation starts to improve perceived performance
+    const timer = setTimeout(() => {
+      setShouldLoadIframe(true);
+    }, 100); // Small delay to let animation start smoothly
+    return () => clearTimeout(timer);
   }, [url]);
 
   const handleIframeError = () => {
@@ -191,17 +198,6 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </button>
-            
-            {/* Manual Fallback - Show error message if iframe doesn't load */}
-            {!iframeError && (
-              <button
-                onClick={() => setIframeError(true)}
-                className="flex h-7 items-center justify-center rounded px-2 text-xs text-[#1a1a1a]/50 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-                title="If page doesn't load, click to see alternative options"
-              >
-                Page not loading?
-              </button>
-            )}
 
             {/* Close */}
             <button
@@ -246,49 +242,61 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
                 height: `${100 / zoomLevel}%`,
               }}
             >
-              <iframe
-                ref={iframeRef}
-                src={getProxyUrl(url)}
-                className="h-full w-full border-0"
-                title="Page Preview"
-                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
-                onError={handleIframeError}
-                onLoad={(e) => {
-                  // Note: Console errors from iframe content (CORS, network failures) are expected
-                  // and cannot be suppressed for cross-origin iframes due to browser security.
-                  // These errors come from third-party scripts in the loaded page and don't affect functionality.
-                  try {
-                    const iframe = e.target as HTMLIFrameElement;
-                    // Try to suppress errors for same-origin iframes only
-                    if (iframe.contentWindow) {
-                      try {
-                        const iframeWindow = iframe.contentWindow as any;
-                        // Only works for same-origin iframes
-                        if (iframeWindow.console && iframeWindow.console.error) {
-                          const originalError = iframeWindow.console.error;
-                          iframeWindow.console.error = (...args: any[]) => {
-                            const errorMsg = args.join(' ');
-                            const isExpectedError = 
-                              errorMsg.includes('CORS') ||
-                              errorMsg.includes('Access-Control-Allow-Origin') ||
-                              errorMsg.includes('ERR_BLOCKED_BY_CLIENT') ||
-                              errorMsg.includes('ERR_FAILED') ||
-                              errorMsg.includes('net::ERR_');
-                            
-                            if (!isExpectedError) {
-                              originalError.apply(iframeWindow.console, args);
-                            }
-                          };
+              {shouldLoadIframe ? (
+                <iframe
+                  ref={iframeRef}
+                  src={getProxyUrl(url || '')}
+                  className="h-full w-full border-0"
+                  title="Page Preview"
+                  sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                  onError={handleIframeError}
+                  onLoad={(e) => {
+                    // Reset error state on successful load
+                    setIframeError(false);
+                    
+                    // Note: Console errors from iframe content (CORS, network failures) are expected
+                    // and cannot be suppressed for cross-origin iframes due to browser security.
+                    // These errors come from third-party scripts in the loaded page and don't affect functionality.
+                    try {
+                      const iframe = e.target as HTMLIFrameElement;
+                      // Try to suppress errors for same-origin iframes only
+                      if (iframe.contentWindow) {
+                        try {
+                          const iframeWindow = iframe.contentWindow as any;
+                          // Only works for same-origin iframes
+                          if (iframeWindow.console && iframeWindow.console.error) {
+                            const originalError = iframeWindow.console.error;
+                            iframeWindow.console.error = (...args: any[]) => {
+                              const errorMsg = args.join(' ');
+                              const isExpectedError = 
+                                errorMsg.includes('CORS') ||
+                                errorMsg.includes('Access-Control-Allow-Origin') ||
+                                errorMsg.includes('ERR_BLOCKED_BY_CLIENT') ||
+                                errorMsg.includes('ERR_FAILED') ||
+                                errorMsg.includes('net::ERR_') ||
+                                errorMsg.includes('SecurityError') ||
+                                errorMsg.includes('Failed to execute \'replaceState\'') ||
+                                errorMsg.includes('Failed to execute \'pushState\'');
+                              
+                              if (!isExpectedError) {
+                                originalError.apply(iframeWindow.console, args);
+                              }
+                            };
+                          }
+                        } catch (crossOriginError) {
+                          // Cross-origin iframe - cannot access console (expected)
                         }
-                      } catch (crossOriginError) {
-                        // Cross-origin iframe - cannot access console (expected)
                       }
+                    } catch (error) {
+                      // Ignore errors during iframe setup
                     }
-                  } catch (error) {
-                    // Ignore errors during iframe setup
-                  }
-                }}
-              />
+                  }}
+                />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <div className="text-sm text-[#1a1a1a]/40">Loading preview...</div>
+                  </div>
+                )}
             </div>
           )}
         </div>

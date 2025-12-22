@@ -103,6 +103,40 @@ function CanvasContent() {
     }, 100);
   }, [deselectNodesFn]);
 
+  // Track previous projectId to detect changes
+  const prevProjectIdRef = useRef<string>(projectId);
+
+  // Clear all state and refresh when project changes
+  useEffect(() => {
+    // Only run if project actually changed (not on initial mount)
+    if (prevProjectIdRef.current !== projectId && prevProjectIdRef.current !== '') {
+      console.log('🔄 Project changed, clearing all state and refreshing...');
+      
+      // Clear all local state
+      setIframePreviewUrl(null);
+      setSearchTerm('');
+      setSelectedNode(null);
+      setSelectedSitemap('All Sitemaps');
+      setFocusNodeFn(null);
+      setDeselectNodesFn(null);
+      
+      // Force a full page refresh to ensure all data is cleared
+      // This ensures React Flow, hooks, and all components are fully reset
+      window.location.href = `/canvas?project=${projectId}`;
+      return;
+    }
+    
+    // Update ref for next comparison
+    prevProjectIdRef.current = projectId;
+  }, [projectId]);
+
+  // Close preview panel when project changes (before refresh)
+  useEffect(() => {
+    if (iframePreviewUrl) {
+      handlePreviewClose();
+    }
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Test Firestore connection on mount
   useEffect(() => {
     testFirestoreConnection();
