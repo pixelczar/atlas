@@ -191,8 +191,21 @@ export default function SiteMapFlow({
           style: { stroke: '#5B98D6', strokeWidth: 2, opacity: 0.4 },
         };
       });
-      
-setEdges(firestoreEdges as Edge[]);
+
+      // Only update edges if they have actually changed
+      setEdges((currentEdges) => {
+        // Quick length check first
+        if (currentEdges.length !== firestoreEdges.length) {
+          return firestoreEdges as Edge[];
+        }
+        // Compare edge IDs and connections
+        const currentEdgeMap = new Map(currentEdges.map(e => [e.id, `${e.source}-${e.target}`]));
+        const hasChanges = firestoreEdges.some(e => {
+          const current = currentEdgeMap.get(e.id);
+          return current !== `${e.source}-${e.target}`;
+        });
+        return hasChanges ? firestoreEdges as Edge[] : currentEdges;
+      });
     });
 
     return () => unsubscribe();
@@ -204,10 +217,7 @@ setEdges(firestoreEdges as Edge[]);
   }, [onNodesChange]);
 
   const handleDeleteNode = useCallback(async (nodeId: string) => {
-    if (!db) {
-      console.error('Firestore not initialized');
-      return;
-    }
+    if (!db) return;
 
     try {
       
@@ -220,23 +230,9 @@ setEdges(firestoreEdges as Edge[]);
       // Then delete from Firestore
       const nodeRef = doc(db, `projects/${projectId}/nodes/${nodeId}`);
       
-      // Add a try-catch specifically for the deleteDoc operation
-      try {
-        await deleteDoc(nodeRef);
-      } catch (deleteError) {
-        console.error('❌ Firestore delete failed:', deleteError);
-        console.error('❌ Delete error details:', {
-          code: (deleteError as any).code,
-          message: (deleteError as any).message,
-          path: `projects/${projectId}/nodes/${nodeId}`
-        });
-        throw deleteError; // Re-throw to be caught by outer catch
-      }
+      await deleteDoc(nodeRef);
     } catch (error) {
-      console.error('❌ Error deleting node:', error);
-      console.error('❌ Full error object:', error);
-      // If deletion failed, we should restore the node
-      // For now, just log the error
+      console.error('Error deleting node:', error);
     }
   }, [projectId, setNodes]);
 
@@ -316,7 +312,7 @@ setEdges(firestoreEdges as Edge[]);
           setNodes(layoutedNodes);
           setNeedsInitialFitView(true);
         } catch (error) {
-          console.error('❌ Layout failed:', error);
+          console.error('Layout failed:', error);
           // Fallback to grid layout
           const fallbackNodes = applyLayout(highlightedNodes, 'grid', layoutOptions);
           setNodes(fallbackNodes);

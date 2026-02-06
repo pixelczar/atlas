@@ -17,11 +17,11 @@ export function extractTitleFromUrl(url: string): string {
   try {
     const urlObj = new URL(url);
     const pathname = urlObj.pathname;
-    
+
     // Remove trailing slash and get last segment
     const segments = pathname.replace(/\/$/, '').split('/');
     const lastSegment = segments[segments.length - 1];
-    
+
     if (lastSegment) {
       // Convert kebab-case or snake_case to Title Case
       return lastSegment
@@ -30,7 +30,7 @@ export function extractTitleFromUrl(url: string): string {
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
     }
-    
+
     return urlObj.hostname.replace('www.', '');
   } catch {
     return 'New Page';
@@ -48,7 +48,7 @@ export function calculateNewNodePosition(
   // Default starting position
   const baseX = viewportCenter?.x ?? 400;
   const baseY = viewportCenter?.y ?? 100;
-  
+
   if (existingNodes.length === 0) {
     return { x: baseX, y: baseY };
   }
@@ -58,16 +58,16 @@ export function calculateNewNodePosition(
   const nodeHeight = 144; // Approximate height of each node (h-36 = 144px)
   const spacing = 60; // Space between nodes (increased to prevent collisions)
   const nodesPerRow = 3; // Number of nodes per row (reduced for better spacing)
-  
+
   // Calculate grid position
   const nodeIndex = existingNodes.length;
   const row = Math.floor(nodeIndex / nodesPerRow);
   const col = nodeIndex % nodesPerRow;
-  
+
   // Calculate position with proper spacing
   const x = baseX + (col * (nodeWidth + spacing));
   const y = baseY + (row * (nodeHeight + spacing));
-  
+
   return { x, y };
 }
 
@@ -76,45 +76,39 @@ export function calculateNewNodePosition(
  * Calculates optimal columns based on viewport width
  */
 export async function regridAllNodes(
-  projectId: string, 
+  projectId: string,
   nodes: Array<{ id: string; position: { x: number; y: number } }>,
   viewportWidth?: number
 ): Promise<void> {
   if (nodes.length === 0) {
-    console.log('⏸️ No nodes to re-grid');
     return;
   }
 
   if (!db) {
-    console.error('❌ Firestore not initialized - cannot re-grid nodes');
     throw new Error('Firestore not initialized');
   }
 
-  console.log(`🔄 Starting viewport-aware re-grid of ${nodes.length} nodes`);
-  
   try {
     // Grid parameters
     const nodeWidth = 288; // Fixed card width
     const nodeHeight = 180; // Approximate height with spacing
     const spacing = 40; // Space between nodes
     const padding = 100; // Padding from viewport edges
-    
+
     // Calculate columns based on viewport width
     const availableWidth = (viewportWidth || 1400) - (padding * 2);
     const columnsPerRow = Math.max(1, Math.floor(availableWidth / (nodeWidth + spacing)));
-    
-    console.log(`📐 Viewport: ${viewportWidth}px, Columns: ${columnsPerRow}`);
-    
+
     const batch = writeBatch(db);
-    
+
     // Calculate new grid positions for all nodes
     nodes.forEach((node, index) => {
       const row = Math.floor(index / columnsPerRow);
       const col = index % columnsPerRow;
-      
+
       const x = padding + (col * (nodeWidth + spacing));
       const y = padding + (row * (nodeHeight + spacing));
-      
+
       const nodeRef = doc(db, `projects/${projectId}/nodes`, node.id);
       batch.update(nodeRef, {
         position: { x, y },
@@ -123,9 +117,8 @@ export async function regridAllNodes(
     });
 
     await batch.commit();
-    console.log(`✅ Re-grid completed: ${nodes.length} nodes in ${columnsPerRow} columns`);
   } catch (error) {
-    console.error('❌ Error during re-gridding:', error);
+    console.error('Error during re-gridding:', error);
     throw error;
   }
 }
@@ -145,7 +138,7 @@ export async function addNodeToFirestore(
 
   const nodeId = generateNodeId(url);
   const title = extractTitleFromUrl(url);
-  
+
   const nodeData = {
     id: nodeId,
     url,
@@ -167,26 +160,21 @@ export async function addNodeToFirestore(
 
   const nodesRef = collection(db, `projects/${projectId}/nodes`);
   const docRef = await addDoc(nodesRef, nodeData);
-  
+
   // Trigger screenshot generation using the actual Firestore document ID
   try {
-    console.log('📸 Triggering screenshot for:', url, 'nodeId:', docRef.id);
     const response = await fetch('/api/screenshot', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, nodeId: docRef.id, projectId }),
     });
-    
+
     if (!response.ok) {
-      const errorData = await response.json();
-      console.error('❌ Screenshot API failed:', response.status, errorData);
-    } else {
-      const result = await response.json();
-      console.log('✅ Screenshot API success:', result);
+      console.error('Screenshot API failed:', response.status);
     }
   } catch (error) {
-    console.error('❌ Failed to trigger screenshot:', error);
+    console.error('Failed to trigger screenshot:', error);
   }
-  
+
   return docRef.id;
 }

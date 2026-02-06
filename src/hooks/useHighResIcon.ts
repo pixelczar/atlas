@@ -177,7 +177,7 @@ export function useHighResIcon(domain: string, url?: string) {
         }
       } catch (error) {
         if (!abortController.signal.aborted) {
-          console.error(`❌ Failed to load icon for ${domain}:`, error);
+          console.error(`Failed to load icon for ${domain}:`, error);
           setError(true);
           setIsLoading(false);
           setIsRealIcon(false);

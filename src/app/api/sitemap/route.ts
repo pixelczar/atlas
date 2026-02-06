@@ -41,7 +41,6 @@ export async function POST(request: NextRequest) {
     // Try each sitemap URL until we find one that works
     for (const url of sitemapUrls) {
       try {
-        console.log(`Trying: ${url}`);
         const response = await fetch(url, {
           headers: {
             'User-Agent': 'Atlas Sitemap Explorer/1.0',
@@ -51,11 +50,9 @@ export async function POST(request: NextRequest) {
         if (response.ok) {
           sitemapContent = await response.text();
           sitemapUrl = url;
-          console.log(`✅ Found sitemap at: ${url}`);
           break;
         }
-      } catch (error) {
-        console.log(`❌ Failed to fetch ${url}`);
+      } catch {
         continue;
       }
     }
@@ -72,15 +69,15 @@ export async function POST(request: NextRequest) {
 
     // Extract unique sitemap sources
     const sitemapSources = [...new Set(urls.map(u => u.sitemapSource).filter(Boolean))];
-    
+
     return NextResponse.json({
       success: true,
       domain: normalizedDomain,
       sitemapUrl,
       urlCount: urls.length,
-      urls: urls, // Return all URLs, no limit
+      urls: urls,
       totalUrls: urls.length,
-      sitemaps: sitemapSources, // List of all sitemap files found
+      sitemaps: sitemapSources,
     });
   } catch (error) {
     console.error('Sitemap API error:', error);
@@ -98,9 +95,8 @@ export async function POST(request: NextRequest) {
 async function parseSitemapXML(xmlContent: string, depth = 0, sourceName = 'sitemap.xml'): Promise<SitemapUrl[]> {
   const MAX_DEPTH = 3; // Prevent infinite recursion
   const MAX_SITEMAPS = 50; // Limit number of sub-sitemaps to fetch
-  
+
   if (depth > MAX_DEPTH) {
-    console.log('⚠️ Max depth reached, stopping recursion');
     return [];
   }
 
@@ -108,7 +104,7 @@ async function parseSitemapXML(xmlContent: string, depth = 0, sourceName = 'site
 
   // Try to parse as a regular sitemap first
   const urlMatches = xmlContent.matchAll(/<url>([\s\S]*?)<\/url>/g);
-  
+
   for (const match of urlMatches) {
     const urlBlock = match[1];
     const locMatch = urlBlock.match(/<loc>(.*?)<\/loc>/);
@@ -127,7 +123,6 @@ async function parseSitemapXML(xmlContent: string, depth = 0, sourceName = 'site
 
   // If URLs found, return them (this is a regular sitemap)
   if (urls.length > 0) {
-    console.log(`✅ Found ${urls.length} URLs in ${sourceName} (depth ${depth})`);
     return urls;
   }
 
@@ -146,53 +141,42 @@ async function parseSitemapXML(xmlContent: string, depth = 0, sourceName = 'site
 
   // If this is a sitemap index, recursively fetch all sub-sitemaps
   if (sitemapUrls.length > 0) {
-    console.log(`📂 Found sitemap index with ${sitemapUrls.length} sub-sitemaps (depth ${depth})`);
-    
     const allUrls: SitemapUrl[] = [];
     const sitemapsToFetch = sitemapUrls.slice(0, MAX_SITEMAPS);
-    
+
     // Fetch sub-sitemaps in parallel (but limit concurrency)
     const batchSize = 5;
     for (let i = 0; i < sitemapsToFetch.length; i += batchSize) {
       const batch = sitemapsToFetch.slice(i, i + batchSize);
-      
+
       const batchPromises = batch.map(async (sitemapUrl) => {
         try {
           // Extract filename from URL for tracking
           const urlParts = sitemapUrl.split('/');
           const filename = urlParts[urlParts.length - 1] || 'sitemap.xml';
-          
-          console.log(`🔍 Fetching sub-sitemap: ${filename}`);
+
           const response = await fetch(sitemapUrl, {
             headers: { 'User-Agent': 'Atlas Sitemap Explorer/1.0' },
           });
 
           if (response.ok) {
             const content = await response.text();
-            const parsedUrls = await parseSitemapXML(content, depth + 1, filename);
-            console.log(`✅ Parsed ${parsedUrls.length} URLs from ${filename}`);
-            return parsedUrls;
+            return await parseSitemapXML(content, depth + 1, filename);
           } else {
-            console.log(`❌ Failed to fetch ${sitemapUrl}: ${response.status}`);
             return [];
           }
-        } catch (error) {
-          console.log(`❌ Error fetching ${sitemapUrl}:`, error);
+        } catch {
           return [];
         }
       });
 
       const batchResults = await Promise.all(batchPromises);
       batchResults.forEach(urls => allUrls.push(...urls));
-      
-      console.log(`📊 Progress: ${allUrls.length} total URLs from ${i + batch.length} sitemaps`);
     }
 
     return allUrls;
   }
 
   // No URLs or sitemaps found
-  console.log('⚠️ No URLs or sub-sitemaps found in XML');
   return [];
 }
-

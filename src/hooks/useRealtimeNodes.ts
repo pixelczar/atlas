@@ -85,12 +85,7 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
           setLoading(false);
         },
         (error) => {
-          console.error('❌ Firestore listener error:', error);
-          console.error('Error details:', {
-            code: error.code,
-            message: error.message,
-            projectId: cleanProjectId
-          });
+          console.error('Firestore listener error:', error);
           setLoading(false);
         }
       );

@@ -71,7 +71,6 @@ export default function DashboardPage() {
 
   const handleEditProject = (project: Project) => {
     // TODO: Implement edit functionality
-    console.log('Edit project:', project);
     setOpenDropdownId(null);
   };
 
@@ -87,8 +86,6 @@ export default function DashboardPage() {
       
       // Note: In a production app, you might also want to delete related data
       // like nodes, edges, etc. For now, we'll just delete the project document
-      
-      console.log('Project deleted successfully');
     } catch (error) {
       console.error('Error deleting project:', error);
       alert('Failed to delete project. Please try again.');
@@ -260,8 +257,8 @@ export default function DashboardPage() {
                         await updateDoc(projectRef, {
                           lastAccessed: new Date(),
                         });
-                      } catch (error) {
-                        console.error('Error updating lastAccessed:', error);
+                      } catch {
+                        // Silently fail - not critical
                       }
                     }}
                   >

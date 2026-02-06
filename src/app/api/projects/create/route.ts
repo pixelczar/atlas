@@ -21,14 +21,14 @@ export async function POST(request: NextRequest) {
 
     // Extract unique sitemap sources (fallback if not provided)
     const sitemapSources = sitemaps || [...new Set(urls.map((u: any) => u.sitemapSource).filter(Boolean))];
-    
+
     // Create project document
     const projectRef = await addDoc(collection(db, 'projects'), {
       name,
       domain,
       sitemapUrl,
-      urlCount: urlCount || urls.length, // Use provided count or fallback to urls length
-      sitemaps: sitemapSources, // Store list of all sitemap files
+      urlCount: urlCount || urls.length,
+      sitemaps: sitemapSources,
       ownerId: 'anonymous', // TODO: Replace with actual user ID from auth
       settings: {
         autoLayout: true,
@@ -44,8 +44,6 @@ export async function POST(request: NextRequest) {
     // Limit total nodes to prevent performance issues
     const MAX_NODES = 500;
     const urlsToCreate = urls.slice(0, MAX_NODES);
-    
-    console.log(`📝 Creating hierarchical layout for ${urlsToCreate.length} nodes`);
 
     // Build URL hierarchy
     const hierarchy = buildURLHierarchy(urlsToCreate);
@@ -56,28 +54,26 @@ export async function POST(request: NextRequest) {
       startY: 100,
     });
     const edges = createHierarchyEdges(hierarchy);
-    
-    console.log(`🌲 Hierarchy built: ${hierarchy.size} nodes, ${edges.length} edges`);
 
     // Create nodes with hierarchical positions
     const BATCH_SIZE = 500;
     const nodeRefs: any[] = [];
-    const urlToNodeId = new Map<string, string>(); // Track URL to Firestore ID mapping
-    
+    const urlToNodeId = new Map<string, string>();
+
     const hierarchyArray = Array.from(hierarchy.values());
-    
+
     for (let i = 0; i < hierarchyArray.length; i += BATCH_SIZE) {
       const batchNodes = hierarchyArray.slice(i, i + BATCH_SIZE);
       const batch = writeBatch(db);
-      
+
       batchNodes.forEach((hierarchyNode) => {
         const nodeRef = doc(collection(db, `projects/${projectId}/nodes`));
         const position = positions.get(hierarchyNode.path) || { x: 0, y: 0 };
-        
+
         // Find the original URL data to get sitemapSource
         const originalUrlData = urlsToCreate.find((u: any) => u.url === hierarchyNode.url);
         const sitemapSource = originalUrlData?.sitemapSource || 'sitemap.xml';
-        
+
         nodeRefs.push({ id: nodeRef.id, url: hierarchyNode.url });
         urlToNodeId.set(hierarchyNode.url, nodeRef.id);
 
@@ -86,7 +82,7 @@ export async function POST(request: NextRequest) {
         if (hierarchyNode.parentPath) {
           const parentNode = hierarchy.get(hierarchyNode.parentPath);
           if (parentNode) {
-            parentId = parentNode.url; // We'll update this with Firestore ID in second pass
+            parentId = parentNode.url;
           }
         }
 
@@ -97,10 +93,10 @@ export async function POST(request: NextRequest) {
           showIframe: false,
           title: hierarchyNode.title,
           description: null,
-          parentId, // Will store parent URL for now
+          parentId,
           depth: hierarchyNode.depth,
           path: hierarchyNode.path,
-          sitemapSource, // Track which sitemap this URL came from
+          sitemapSource,
           metadata: {
             lastModified: null,
             status: 'pending',
@@ -113,7 +109,6 @@ export async function POST(request: NextRequest) {
       });
 
       await batch.commit();
-      console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1} committed (${batchNodes.length} nodes)`);
     }
 
     // Create edges between parent and child nodes using Firestore IDs
@@ -123,18 +118,18 @@ export async function POST(request: NextRequest) {
       nodeRefs.forEach(ref => {
         urlToId.set(ref.url, ref.id);
       });
-      
+
       const edgeBatch = writeBatch(db);
       let edgesCreated = 0;
-      
+
       edges.slice(0, 500).forEach((edge) => {
         const sourceId = urlToId.get(edge.source);
         const targetId = urlToId.get(edge.target);
-        
+
         // Only create edge if both nodes exist
         if (sourceId && targetId) {
           const edgeRef = doc(collection(db, `projects/${projectId}/edges`));
-          
+
           edgeBatch.set(edgeRef, {
             source: sourceId,
             target: targetId,
@@ -147,14 +142,11 @@ export async function POST(request: NextRequest) {
           edgesCreated++;
         }
       });
-      
+
       if (edgesCreated > 0) {
         await edgeBatch.commit();
-        console.log(`✅ Created ${edgesCreated} edges`);
       }
     }
-
-    console.log(`✅ Created project ${projectId} with ${nodeRefs.length} nodes`);
 
     // Wait a moment for Firestore to be fully consistent before triggering screenshots
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -173,4 +165,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

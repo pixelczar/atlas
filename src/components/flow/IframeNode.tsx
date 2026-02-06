@@ -135,10 +135,8 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
               transition={{ duration: 0.15, ease: [0.25, 0.46, 0.45, 0.94] }}
               className="absolute top-2 right-2 z-10"
               style={{
-                // Fixed size regardless of zoom level
                 transform: 'scale(1)',
                 transformOrigin: 'top right',
-                willChange: 'transform, opacity',
               }}
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
@@ -159,9 +157,6 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
                         <button
                           onClick={data.onToggleIframe}
                           className="flex h-6 w-6 items-center justify-center rounded text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-                          style={{
-                            willChange: 'background-color, color',
-                          }}
                         >
                           <Maximize2 className="h-3 w-3" />
                         </button>
@@ -179,9 +174,6 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
                         <button
                           onClick={data.onOpenExternal}
                           className="flex h-6 w-6 items-center justify-center rounded text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-                          style={{
-                            willChange: 'background-color, color',
-                          }}
                         >
                           <ExternalLink className="h-3 w-3" />
                         </button>
@@ -199,9 +191,6 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
                         <button
                           onClick={data.onToggleVisibility}
                           className="flex h-6 w-6 items-center justify-center rounded text-[#1a1a1a]/60 transition-colors hover:bg-[#5B98D6]/10 hover:text-[#4863B0]"
-                          style={{
-                            willChange: 'background-color, color',
-                          }}
                         >
                           {isHidden ? (
                             <Eye className="h-3 w-3" />
@@ -274,8 +263,7 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
                         loading="lazy"
                         decoding="async"
                         onError={(e) => {
-                          console.error('Failed to load favicon:', faviconUrl);
-                          // Fallback to letter if image fails
+                          // Silent fallback to letter if image fails
                           const parent = (e.target as HTMLElement).closest('.relative');
                           if (parent) {
                             parent.innerHTML = `
@@ -289,7 +277,6 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
                           imageRendering: 'auto',
                           backfaceVisibility: 'hidden',
                           transform: 'translateZ(0)',
-                          willChange: 'transform',
                           WebkitBackfaceVisibility: 'hidden',
                           WebkitTransform: 'translateZ(0)',
                         }}
@@ -325,11 +312,14 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
 
 export default memo(IframeNode, (prevProps, nextProps) => {
   // Only re-render if these specific props change
+  // Note: Callback props (onToggleIframe, onOpenExternal, onToggleVisibility) are
+  // intentionally excluded - they should be stable via useCallback in parent
   return (
     prevProps.id === nextProps.id &&
     prevProps.selected === nextProps.selected &&
     prevProps.data.label === nextProps.data.label &&
     prevProps.data.url === nextProps.data.url &&
+    prevProps.data.title === nextProps.data.title &&
     prevProps.data.thumbnailUrl === nextProps.data.thumbnailUrl &&
     prevProps.data.status === nextProps.data.status &&
     prevProps.data.isHidden === nextProps.data.isHidden &&
