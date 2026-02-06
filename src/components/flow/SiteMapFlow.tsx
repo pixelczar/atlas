@@ -156,6 +156,7 @@ export default function SiteMapFlow({
   const [zoomInFunction, setZoomInFunction] = useState<(() => void) | null>(null);
   const [zoomOutFunction, setZoomOutFunction] = useState<(() => void) | null>(null);
   const [focusNodeFunction, setFocusNodeFunction] = useState<((nodeId: string) => void) | null>(null);
+  const focusNodeRef = useRef<((nodeId: string) => void) | null>(null);
   const [selectedNodes, setSelectedNodes] = useState<any[]>([]);
   const [isManuallyMoving, setIsManuallyMoving] = useState(false);
   const [visibleCount, setVisibleCount] = useState(0);
@@ -191,8 +192,7 @@ export default function SiteMapFlow({
         };
       });
       
-      console.log(`📊 Loaded ${firestoreEdges.length} edges`);
-      setEdges(firestoreEdges as Edge[]);
+setEdges(firestoreEdges as Edge[]);
     });
 
     return () => unsubscribe();
@@ -200,38 +200,8 @@ export default function SiteMapFlow({
   
   // Custom nodes change handler that respects manual movement
   const handleNodesChange = useCallback((changes: any[]) => {
-    // CRITICAL FIX: Filter out mass 'select' changes that cause zoom-out
-    // When you click a node, React Flow sends 'select' changes for ALL nodes
-    // This causes it to zoom out to fit all nodes
-    const filteredChanges = changes.filter(change => {
-      // Allow position changes (dragging)
-      if (change.type === 'position') return true;
-      // Allow dimension changes
-      if (change.type === 'dimensions') return true;
-      // Allow remove changes
-      if (change.type === 'remove') return true;
-      // Allow add changes
-      if (change.type === 'add') return true;
-      // Block mass select changes (more than 10 at once)
-      if (change.type === 'select' && changes.length > 10) {
-        return false;
-      }
-      // Allow individual select changes
-      if (change.type === 'select') return true;
-      // Allow other changes
-      return true;
-    });
-    
-    // Only apply if we have filtered changes
-    if (filteredChanges.length > 0) {
-      onNodesChange(filteredChanges);
-    }
-    
-    // If manually moving, just return - no re-gridding
-    if (isManuallyMoving) {
-      return;
-    }
-  }, [onNodesChange, isManuallyMoving]);
+    onNodesChange(changes);
+  }, [onNodesChange]);
 
   const handleDeleteNode = useCallback(async (nodeId: string) => {
     if (!db) {
@@ -240,23 +210,19 @@ export default function SiteMapFlow({
     }
 
     try {
-      console.log('🗑️ Attempting to delete node:', nodeId);
       
       // Optimistically remove from React Flow immediately
       setNodes(prevNodes => {
         const filtered = prevNodes.filter(node => node.id !== nodeId);
-        console.log('🎯 Optimistically removed node, remaining:', filtered.length);
         return filtered;
       });
       
       // Then delete from Firestore
       const nodeRef = doc(db, `projects/${projectId}/nodes/${nodeId}`);
-      console.log('🗑️ Deleting from path:', `projects/${projectId}/nodes/${nodeId}`);
       
       // Add a try-catch specifically for the deleteDoc operation
       try {
         await deleteDoc(nodeRef);
-        console.log('✅ Node deleted successfully from Firestore:', nodeId);
       } catch (deleteError) {
         console.error('❌ Firestore delete failed:', deleteError);
         console.error('❌ Delete error details:', {
@@ -282,7 +248,6 @@ export default function SiteMapFlow({
       return firestoreNodes;
     }
     
-    console.log(`🔍 Filtering nodes for sitemap: ${selectedSitemap}`);
     return firestoreNodes.filter((node: any) => {
       const nodeSitemap = node.data?.sitemapSource;
       return nodeSitemap === selectedSitemap;
@@ -320,17 +285,14 @@ export default function SiteMapFlow({
 
   // PERFORMANCE OPTIMIZED: Apply layout when nodes change or layout type changes
   useEffect(() => {
-    console.log(`🎯 Layout effect triggered: ${firestoreNodes.length} nodes, layout: ${selectedLayout}, sitemap: ${selectedSitemap}`);
     
     // Skip if manually moving nodes
     if (isManuallyMoving) {
-      console.log('⏸️ Skipping layout - manually moving nodes');
       return;
     }
     
     // Skip if no nodes
     if (firestoreNodes.length === 0) {
-      console.log('⏸️ Skipping layout - no nodes');
       return;
     }
     
@@ -346,7 +308,6 @@ export default function SiteMapFlow({
         width: window.innerWidth,
         height: window.innerHeight,
       };
-      console.log(`🎯 Applying ${selectedLayout} layout to ${highlightedNodes.length} nodes`);
       
       // PERFORMANCE: Debounce layout application for large datasets
       const layoutTimeout = setTimeout(() => {
@@ -435,32 +396,31 @@ export default function SiteMapFlow({
     });
   }, []);
 
+  // Keep focusNodeRef in sync so the auto-preview effect doesn't retrigger on pan/zoom
+  useEffect(() => {
+    focusNodeRef.current = focusNodeFunction;
+  }, [focusNodeFunction]);
+
   // Auto-open preview when single node is selected (but not if it was a drag or pan)
   useEffect(() => {
-    // Don't auto-open if we're closing the preview, panning, or has moved (dragged)
-    if (isClosingPreviewRef.current) {
-      return;
-    }
-    
-    // Don't auto-open if user is panning or has moved (dragged)
-    if (selectedNodes.length === 1 && onPreviewOpen && !hasMoved && !isPanning) {
+    if (isClosingPreviewRef.current) return;
+
+    if (selectedNodes.length === 1 && onPreviewOpen && !hasMoved) {
       const selectedNode = selectedNodes[0];
       if (selectedNode?.data?.url) {
-        console.log('🎯 Auto-opening preview for selected node:', selectedNode.data.url);
         onPreviewOpen(selectedNode.data.url);
-        
-        // Only focus the node if we're not currently panning and preview is not open
-        if (focusNodeFunction && !isPanning && !isPanningRef.current && !isPreviewOpen) {
+
+        // Focus the node if not panning and preview is not yet open
+        if (!isPanningRef.current && !isPreviewOpen) {
           setTimeout(() => {
-            // Triple-check panning state and preview state
-            if (!isPanning && !isPanningRef.current && !isPreviewOpen) {
-              focusNodeFunction(selectedNode.id);
+            if (!isPanningRef.current) {
+              focusNodeRef.current?.(selectedNode.id);
             }
           }, 100);
         }
       }
     }
-    
+
     // Update breadcrumb with selected node
     if (onNodeSelection) {
       if (selectedNodes.length === 1) {
@@ -474,7 +434,7 @@ export default function SiteMapFlow({
         onNodeSelection(null);
       }
     }
-  }, [selectedNodes, onPreviewOpen, focusNodeFunction, onNodeSelection, hasMoved, isPanning]);
+  }, [selectedNodes, onPreviewOpen, onNodeSelection, hasMoved, isPreviewOpen]);
 
   // Handle node drag start
   const onNodeDragStart = useCallback((event: any, node: any) => {
@@ -530,7 +490,6 @@ export default function SiteMapFlow({
         }
         
         await batch.commit();
-        console.log(`✅ Batch saved ${positions.length} node positions`);
         pendingPositionsRef.current.clear();
       } catch (error) {
         console.error('Error batch saving node positions:', error);
@@ -547,7 +506,6 @@ export default function SiteMapFlow({
   // Reset manual positioning to allow layout re-application
   const resetManualPositioning = useCallback(() => {
     setIsManuallyMoving(false);
-    console.log('🔄 Reset manual positioning - layout will be re-applied');
   }, []);
 
 
@@ -586,7 +544,6 @@ export default function SiteMapFlow({
         });
       });
       await batch.commit();
-      console.log(`✅ ${newHiddenState ? 'Hidden' : 'Shown'} ${targetNodes.length} nodes`);
     } catch (error) {
       console.error('Error updating node visibility:', error);
     }

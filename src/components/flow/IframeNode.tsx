@@ -68,10 +68,8 @@ function IframeNode({ data, id, selected }: NodeProps<IframeNodeData>) {
       const hostname = new URL(data.url).hostname;
       // Remove 'www.' prefix if present
       const cleanDomain = hostname.replace(/^www\./, '');
-      console.log(`🌐 Extracted domain for ${data.url}: ${cleanDomain}`);
       return cleanDomain;
     } catch {
-      console.warn(`⚠️ Failed to parse URL: ${data.url}`);
       return data.url;
     }
   }, [data.url]);

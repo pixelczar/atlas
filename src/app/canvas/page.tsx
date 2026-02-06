@@ -35,7 +35,6 @@ function CanvasContent() {
     const savedSitemap = localStorage.getItem(`atlas-sitemap-${projectId}`);
     if (savedSitemap) {
       setSelectedSitemap(savedSitemap);
-      console.log(`🎯 Canvas: Restored sitemap selection: ${savedSitemap}`);
     }
   }, [projectId]);
   
@@ -43,13 +42,11 @@ function CanvasContent() {
   useEffect(() => {
     if (selectedSitemap !== 'All Sitemaps') {
       localStorage.setItem(`atlas-sitemap-${projectId}`, selectedSitemap);
-      console.log(`🎯 Canvas: Saved sitemap selection: ${selectedSitemap}`);
     }
   }, [selectedSitemap, projectId]);
   
   // Debug sitemap changes
   useEffect(() => {
-    console.log(`🎯 Canvas: selectedSitemap changed to: ${selectedSitemap}`);
   }, [selectedSitemap]);
   const [selectedLayout, setSelectedLayout] = useState<LayoutType>('elk');
   const [showProjectSidebar, setShowProjectSidebar] = useState(false);
@@ -65,7 +62,6 @@ function CanvasContent() {
   } | null>(null);
 
   const handleFlowReady = useCallback((_: () => void, __: () => void) => {
-    console.log('🎯 Flow ready');
   }, []);
 
   const handleFocusNode = useCallback((focusNodeFunction: (nodeId: string) => void) => {
@@ -110,7 +106,6 @@ function CanvasContent() {
   useEffect(() => {
     // Only run if project actually changed (not on initial mount)
     if (prevProjectIdRef.current !== projectId && prevProjectIdRef.current !== '') {
-      console.log('🔄 Project changed, clearing all state and refreshing...');
       
       // Clear all local state
       setIframePreviewUrl(null);
@@ -143,14 +138,12 @@ function CanvasContent() {
   }, []);
 
   const handleNodeClick = useCallback((nodeId: string) => {
-    console.log('🎯 Focusing on node from browser:', nodeId);
     if (focusNodeFn) {
       focusNodeFn(nodeId);
     }
   }, [focusNodeFn]);
 
   const handlePagePreview = useCallback((nodeId: string, url: string) => {
-    console.log('🎯 Opening preview for:', url);
     // Open the preview
     handlePreviewOpen(url);
     // Focus on the node

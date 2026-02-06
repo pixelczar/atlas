@@ -251,45 +251,26 @@ export function IframePreviewPanel({ url, onClose }: IframePreviewPanelProps) {
                   sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
                   onError={handleIframeError}
                   onLoad={(e) => {
-                    // Reset error state on successful load
-                    setIframeError(false);
-                    
-                    // Note: Console errors from iframe content (CORS, network failures) are expected
-                    // and cannot be suppressed for cross-origin iframes due to browser security.
-                    // These errors come from third-party scripts in the loaded page and don't affect functionality.
                     try {
                       const iframe = e.target as HTMLIFrameElement;
-                      // Try to suppress errors for same-origin iframes only
-                      if (iframe.contentWindow) {
-                        try {
-                          const iframeWindow = iframe.contentWindow as any;
-                          // Only works for same-origin iframes
-                          if (iframeWindow.console && iframeWindow.console.error) {
-                            const originalError = iframeWindow.console.error;
-                            iframeWindow.console.error = (...args: any[]) => {
-                              const errorMsg = args.join(' ');
-                              const isExpectedError = 
-                                errorMsg.includes('CORS') ||
-                                errorMsg.includes('Access-Control-Allow-Origin') ||
-                                errorMsg.includes('ERR_BLOCKED_BY_CLIENT') ||
-                                errorMsg.includes('ERR_FAILED') ||
-                                errorMsg.includes('net::ERR_') ||
-                                errorMsg.includes('SecurityError') ||
-                                errorMsg.includes('Failed to execute \'replaceState\'') ||
-                                errorMsg.includes('Failed to execute \'pushState\'');
-                              
-                              if (!isExpectedError) {
-                                originalError.apply(iframeWindow.console, args);
-                              }
-                            };
-                          }
-                        } catch (crossOriginError) {
-                          // Cross-origin iframe - cannot access console (expected)
+                      if (iframe.contentDocument) {
+                        const bodyText = iframe.contentDocument.body?.innerText || '';
+                        // Detect Next.js / React error boundary pages
+                        if (
+                          bodyText.includes('Application error') ||
+                          bodyText.includes('client-side exception') ||
+                          bodyText.includes('Internal Server Error')
+                        ) {
+                          setIframeError(true);
+                          return;
                         }
                       }
-                    } catch (error) {
-                      // Ignore errors during iframe setup
+                    } catch {
+                      // Cross-origin - can't check content
                     }
+
+                    // Reset error state on successful load
+                    setIframeError(false);
                   }}
                 />
                 ) : (

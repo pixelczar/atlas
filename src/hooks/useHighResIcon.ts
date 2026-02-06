@@ -143,7 +143,6 @@ export function useHighResIcon(domain: string, url?: string) {
             }
           }
         } catch (error) {
-          console.log(`OG image fetch failed for ${domainKey}`);
         }
 
         // Final fallback - SVG with higher resolution (but mark as not real)
@@ -172,7 +171,6 @@ export function useHighResIcon(domain: string, url?: string) {
         const icon = await fetchIconForDomain(domain);
         if (!abortController.signal.aborted) {
           const isReal = !icon.startsWith('data:image/svg');
-          console.log(`🎨 Icon for ${domain}:`, icon.substring(0, 100), isReal ? '✅ REAL' : '❌ FALLBACK');
           setIconUrl(icon);
           setIsRealIcon(isReal);
           setIsLoading(false);

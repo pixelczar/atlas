@@ -60,64 +60,77 @@ export async function GET(request: NextRequest) {
     // This ensures images, CSS, JS, etc. load from the original domain
     const baseTag = `<base href="${targetUrl}" target="_blank">`;
     
-    // Inject error-suppressing script to prevent history manipulation errors
-    // This prevents SecurityError when proxied pages try to manipulate history
+    // Inject error-suppressing script to prevent crashes in proxy context
+    // This is a preview-only context, so we aggressively suppress errors
     const errorSuppressionScript = `
       <script>
         (function() {
           // Suppress history manipulation errors
-          const originalReplaceState = history.replaceState;
-          const originalPushState = history.pushState;
-          
-          history.replaceState = function(...args) {
+          var originalReplaceState = history.replaceState;
+          var originalPushState = history.pushState;
+
+          history.replaceState = function() {
             try {
-              return originalReplaceState.apply(history, args);
+              return originalReplaceState.apply(history, arguments);
             } catch (e) {
-              // Silently ignore SecurityError from cross-origin history manipulation
               if (e.name !== 'SecurityError') throw e;
             }
           };
-          
-          history.pushState = function(...args) {
+
+          history.pushState = function() {
             try {
-              return originalPushState.apply(history, args);
+              return originalPushState.apply(history, arguments);
             } catch (e) {
-              // Silently ignore SecurityError from cross-origin history manipulation
               if (e.name !== 'SecurityError') throw e;
             }
           };
-          
-          // Suppress console errors for CORS and network failures
-          const originalConsoleError = console.error;
-          console.error = function(...args) {
-            const message = args.join(' ');
-            // Filter out expected errors that don't affect functionality
+
+          // Suppress ALL uncaught errors - this is a preview context
+          // Catches errors before they reach framework error boundaries
+          window.onerror = function() { return true; };
+          window.onunhandledrejection = function(e) { if (e && e.preventDefault) e.preventDefault(); };
+
+          window.addEventListener('error', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            return true;
+          }, true);
+
+          window.addEventListener('unhandledrejection', function(e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }, true);
+
+          // Suppress console errors for expected proxy-context failures
+          var originalConsoleError = console.error;
+          console.error = function() {
+            var message = Array.prototype.join.call(arguments, ' ');
             if (
               message.includes('CORS') ||
-              message.includes('Access-Control-Allow-Origin') ||
+              message.includes('Access-Control') ||
               message.includes('ERR_FAILED') ||
-              message.includes('ERR_BLOCKED_BY_CLIENT') ||
+              message.includes('ERR_BLOCKED') ||
               message.includes('net::ERR_') ||
               message.includes('SecurityError') ||
-              message.includes('Failed to execute \'replaceState\'') ||
-              message.includes('Failed to execute \'pushState\'')
+              message.includes('replaceState') ||
+              message.includes('pushState') ||
+              message.includes('Hydration') ||
+              message.includes('hydrat') ||
+              message.includes('Minified React error')
             ) {
-              return; // Suppress these errors
+              return;
             }
-            originalConsoleError.apply(console, args);
+            originalConsoleError.apply(console, arguments);
           };
-          
-          // Suppress uncaught SecurityErrors
-          window.addEventListener('error', function(e) {
-            if (e.error && e.error.name === 'SecurityError') {
-              e.preventDefault();
-              return false;
-            }
-          }, true);
         })();
       </script>
     `;
     
+    // Strip CSP meta tags that would block our injected scripts
+    html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?Content-Security-Policy["']?[^>]*>/gi, '');
+    // Strip X-Frame-Options meta tags
+    html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?X-Frame-Options["']?[^>]*>/gi, '');
+
     // Try to insert base tag and error suppression script in the head
     if (html.includes('<head>')) {
       html = html.replace('<head>', `<head>${baseTag}${errorSuppressionScript}`);

@@ -53,7 +53,6 @@ export function FloatingControls({
           const nodesRef = collection(db, `projects/${projectId}/nodes`);
           const nodesSnapshot = await getDocs(query(nodesRef));
           
-          console.log('🔍 Sitemap counts - Total nodes fetched:', nodesSnapshot.size);
           
           const counts: Record<string, number> = {};
           
@@ -74,8 +73,6 @@ export function FloatingControls({
             }
           }
           
-          console.log('📊 Sitemap counts calculated:', counts);
-          console.log('🎯 Auto-selecting sitemap with most pages:', selectedSitemap, '(', maxPages, 'pages)');
           
           setSitemapCounts(counts);
           

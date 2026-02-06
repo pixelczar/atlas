@@ -33,11 +33,9 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
           
           // Only update if enough time has passed since last update (100ms minimum)
           if (now - lastUpdateRef.current < 100) {
-            console.log('⏸️ Skipping update - too soon since last update');
             return;
           }
           
-          console.log('📊 Firestore snapshot received:', snapshot.docs.length, 'documents');
           const firestoreNodes = snapshot.docs.map((doc) => {
             const data = doc.data();
             
@@ -79,11 +77,9 @@ export function useRealtimeNodes(projectId: string, onDeleteNode?: (nodeId: stri
             });
             
           if (nodesChanged) {
-            console.log('🎯 Setting nodes:', firestoreNodes.length, 'nodes');
             setNodes(firestoreNodes as Node[]);
             lastNodesRef.current = firestoreNodes as Node[];
           } else {
-            console.log('⏸️ Skipping update - nodes unchanged');
           }
           lastUpdateRef.current = now;
           setLoading(false);
