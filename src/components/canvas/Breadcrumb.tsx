@@ -37,7 +37,10 @@ interface PageItem {
 export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemapClick, onSelectSitemap, onSearchChange, onPageClick, onPagePreview, onProjectClick, openPagesRef }: BreadcrumbProps) {
   const [projectName, setProjectName] = useState<string>('');
   const [domain, setDomain] = useState<string>('');
+  const [faviconLoaded, setFaviconLoaded] = useState(false);
   const [showPages, setShowPages] = useState(false);
+  // Keep track of last selected node to prevent "Pages" flash during transitions
+  const lastSelectedNodeRef = useRef<BreadcrumbProps['selectedNode']>(null);
   const [showSitemaps, setShowSitemaps] = useState(false);
   const [pages, setPages] = useState<PageItem[]>([]);
   const [sitemaps, setSitemaps] = useState<string[]>([]);
@@ -181,13 +184,6 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
           const nodesRef = collection(db, `projects/${projectId}/nodes`);
           const nodesSnapshot = await getDocs(query(nodesRef));
           
-          console.log('🔍 Breadcrumb sitemap counts - Total nodes fetched:', nodesSnapshot.size);
-          console.log('📄 Breadcrumb nodes sample:', nodesSnapshot.docs.slice(0, 3).map(doc => ({
-            id: doc.id,
-            url: doc.data().url,
-            sitemapSource: doc.data().sitemapSource
-          })));
-          
           const counts: Record<string, number> = { 'All Sitemaps': nodesSnapshot.size };
           
           nodesSnapshot.docs.forEach(doc => {
@@ -195,7 +191,6 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
             counts[sitemapSource] = (counts[sitemapSource] || 0) + 1;
           });
           
-          console.log('📊 Breadcrumb sitemap counts calculated:', counts);
           setSitemapCounts(counts);
         }
       } catch (error) {
@@ -214,7 +209,6 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
       const nodesRef = collection(db, `projects/${projectId}/nodes`);
       const q = query(nodesRef);
       const snapshot = await getDocs(q);
-      console.log('🔍 Breadcrumb pages fetch - Total nodes fetched:', snapshot.size);
       // Firestore returned documents
 
       // Load hidden state from localStorage
@@ -238,7 +232,6 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
       // Sort by URL
       pageList.sort((a, b) => a.url.localeCompare(b.url));
       // Loaded pages from Firestore
-      console.log('📄 Pages loaded from Firestore:', pageList.length, 'total pages');
       setPages(pageList);
     } catch (error) {
       console.error('Error fetching pages:', error);
@@ -316,12 +309,20 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
   const isMac = typeof window !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
   const shortcutKey = isMac ? '⌘K' : 'Ctrl+K';
 
-  const handleSitemapClick = (sitemap: string) => {
-    if (onSitemapClick) {
-      onSitemapClick();
+  // Track the last known selected node to avoid flashing "Pages"
+  useEffect(() => {
+    if (selectedNode) {
+      lastSelectedNodeRef.current = selectedNode;
     }
-    setShowSitemaps(!showSitemaps);
-  };
+  }, [selectedNode]);
+
+  // The node to display: use current, or keep showing last one during transition
+  const displayNode = selectedNode || lastSelectedNodeRef.current;
+
+  // Reset favicon loaded state when domain changes
+  useEffect(() => {
+    setFaviconLoaded(false);
+  }, [domain]);
 
   return (
     <TooltipProvider>
@@ -337,31 +338,33 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
             onClick={onProjectClick}
             className="rounded-lg px-2 py-1 transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0] font-medium text-[#4863B0] flex items-center gap-1.5"
           >
-            {domain ? (
-              <img 
-                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-                alt={`${domain} favicon`}
-                className="h-4 w-4 rounded-sm"
-                onError={(e) => {
-                  // Fallback to window icon if favicon fails to load
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const fallback = target.nextElementSibling as HTMLElement;
-                  if (fallback) fallback.style.display = 'block';
-                }}
-              />
-            ) : null}
-            <svg 
-              className="h-4 w-4" 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-              style={{ display: domain ? 'none' : 'block' }}
-            >
-              <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2"/>
-              <path d="M9 9h6v6H9z" strokeWidth="2"/>
-              <path d="M3 9h6v6H3z" strokeWidth="2"/>
-            </svg>
+            <span className="relative h-4 w-4 flex-shrink-0">
+              {domain ? (
+                <>
+                  {!faviconLoaded && (
+                    <Globe className="absolute inset-0 h-4 w-4 text-[#4863B0]/40" />
+                  )}
+                  <img
+                    src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                    alt={`${domain} favicon`}
+                    className={`h-4 w-4 rounded-sm transition-opacity duration-150 ${faviconLoaded ? 'opacity-100' : 'opacity-0'}`}
+                    onLoad={() => setFaviconLoaded(true)}
+                    onError={() => setFaviconLoaded(false)}
+                  />
+                </>
+              ) : (
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2"/>
+                  <path d="M9 9h6v6H9z" strokeWidth="2"/>
+                  <path d="M3 9h6v6H3z" strokeWidth="2"/>
+                </svg>
+              )}
+            </span>
             {domain || projectName}
           </button>
 
@@ -377,11 +380,11 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
             >
               <span className="flex items-center gap-1.5">
                 <span>{selectedSitemap}</span>
-                {sitemapCounts[selectedSitemap] && (
-                  <span className="inline-flex items-center justify-center rounded-lg bg-[#4863B0]/10 px-1 py-0.5 text-[10px] font-medium text-[#4863B0] min-w-5">
-                    {sitemapCounts[selectedSitemap]}
-                  </span>
-                )}
+                <span className={`inline-flex items-center justify-center rounded-lg bg-[#4863B0]/10 px-1 py-0.5 text-[10px] font-medium min-w-5 transition-opacity duration-150 ${
+                  sitemapCounts[selectedSitemap] ? 'text-[#4863B0] opacity-100' : 'opacity-0'
+                }`}>
+                  {sitemapCounts[selectedSitemap] || 0}
+                </span>
               </span>
             </motion.button>
           </div>
@@ -389,53 +392,63 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
           <ChevronRight className="h-3 w-3 text-[#1a1a1a]/30" />
 
           {/* Selected Node Path or Pages */}
-          {selectedNode ? (
-            <motion.div
-              key={selectedNode.id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 10 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-              className="flex items-center gap-1.5"
-            >
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <motion.button
-                    onClick={handlePagesClick}
-                    className="flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-[#4863B0] transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0]"
-                  >
-                    <Globe className="h-3 w-3" />
-                    <span className="truncate max-w-[200px]" title={selectedNode.title}>
-                      {selectedNode.title}
-                    </span>
-                  </motion.button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p>{selectedNode.url}</p>
-                </TooltipContent>
-              </Tooltip>
-            </motion.div>
-          ) : (
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <motion.button
-                  onClick={handlePagesClick}
-                  className={`flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0] ${
-                    showPages ? 'bg-[#4863B0]/10 text-[#4863B0]' : 'text-[#4863B0]'
-                  }`}
-                >
-                  <FileText className="h-3 w-3" />
-                  <span>Pages</span>
-                  {hiddenCount > 0 && (
-                    <span className="text-[10px] text-[#1a1a1a]/40">({hiddenCount} hidden)</span>
-                  )}
-                </motion.button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                <p>Search pages <span className="ml-1 text-xs opacity-70">{shortcutKey}</span></p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {displayNode ? (
+              <motion.div
+                key={displayNode.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="flex items-center gap-1.5"
+              >
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      onClick={handlePagesClick}
+                      className="flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium text-[#4863B0] transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0]"
+                    >
+                      <Globe className="h-3 w-3" />
+                      <span className="truncate max-w-[200px]" title={displayNode.title}>
+                        {displayNode.title}
+                      </span>
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>{displayNode.url}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="pages"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+              >
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger asChild>
+                    <motion.button
+                      onClick={handlePagesClick}
+                      className={`flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium transition-colors hover:bg-[#4863B0]/10 hover:text-[#4863B0] ${
+                        showPages ? 'bg-[#4863B0]/10 text-[#4863B0]' : 'text-[#4863B0]'
+                      }`}
+                    >
+                      <FileText className="h-3 w-3" />
+                      <span>Pages</span>
+                      {hiddenCount > 0 && (
+                        <span className="text-[10px] text-[#1a1a1a]/40">({hiddenCount} hidden)</span>
+                      )}
+                    </motion.button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Search pages <span className="ml-1 text-xs opacity-70">{shortcutKey}</span></p>
+                  </TooltipContent>
+                </Tooltip>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
       {/* Pages Panel */}
@@ -648,7 +661,6 @@ export function Breadcrumb({ projectId, selectedSitemap, selectedNode, onSitemap
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.06, duration: 0.16 }}
                       onClick={() => {
-                        console.log(`🔍 Breadcrumb: Selecting sitemap: ${sitemap}`);
                         if (onSelectSitemap) {
                           onSelectSitemap(sitemap);
                         }
